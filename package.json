@@ -3,7 +3,12 @@
   "version": "1.0.0",
   "description": "Personal gaming library hub",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "test": "jest --testPathPatterns=tests/"
+  },
+  "devDependencies": {
+    "jest": "^30.3.0",
+    "supertest": "^7.2.2"
   },
   "dependencies": {
     "@hub/auth": "file:../shared",
