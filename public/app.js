@@ -928,6 +928,12 @@ function setupEvents() {
   $id('dd-theme-dark').addEventListener('click',  () => applyTheme('dark'));
   $id('dd-theme-light').addEventListener('click', () => applyTheme('light'));
 
+  // Help
+  $id('dd-help').addEventListener('click', () => {
+    $id('user-dropdown').classList.add('hidden');
+    window.open(`${getHubUrl()}/help-games.html`, '_blank');
+  });
+
   // Leave to Hub / Admin
   $id('dd-leave').addEventListener('click', () => {
     api('POST', '/api/auth/logout').catch(() => {});
