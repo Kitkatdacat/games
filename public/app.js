@@ -1,0 +1,974 @@
+'use strict';
+
+// ── Hub URL ───────────────────────────────────────────────────────────────────
+
+function getHubUrl() {
+  const h = window.location.hostname;
+  return (h === 'localhost' || h === '127.0.0.1' || /^\d+\.\d+\.\d+\.\d+$/.test(h))
+    ? `http://${h}:3000`
+    : 'https://hub.kitkatdacat.com';
+}
+
+// ── State ─────────────────────────────────────────────────────────────────────
+
+let token           = localStorage.getItem('tkn_games') || null;
+let currentUser     = null;
+let games           = [];
+let genres          = [];
+let platforms       = [];
+let activeGameId    = null;
+let activeView      = 'home';
+let activeSessions  = {};     // gameId -> open session object
+let searchQuery     = '';
+let filterStatus    = '';
+let filterGenre     = '';
+let filterPlatform  = '';
+let heroGames       = [];
+let heroIndex       = 0;
+let heroTimer       = null;
+let currentRating   = 0;
+let editingGameId   = null;   // null = creating new
+
+// ── API Helper ────────────────────────────────────────────────────────────────
+
+async function api(method, path, body) {
+  const opts = {
+    method,
+    headers: { 'Content-Type': 'application/json', 'x-hub-session': token || '' },
+  };
+  if (body !== undefined) opts.body = JSON.stringify(body);
+  const res = await fetch(path, opts);
+  const data = await res.json().catch(() => ({}));
+  if (res.status === 401) { localStorage.removeItem('tkn_games'); window.location.href = getHubUrl(); return; }
+  if (!res.ok) throw new Error(data.error || 'Request failed');
+  return data;
+}
+
+// ── Utilities ─────────────────────────────────────────────────────────────────
+
+function esc(s) {
+  return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function formatPlaytime(min) {
+  if (!min) return '0m';
+  const h = Math.floor(min / 60), m = min % 60;
+  return h ? (m ? `${h}h ${m}m` : `${h}h`) : `${m}m`;
+}
+
+function timeAgo(iso) {
+  if (!iso) return '';
+  const diff = Date.now() - new Date(iso);
+  const d = Math.floor(diff / 86400000);
+  if (d === 0) return 'Today';
+  if (d === 1) return 'Yesterday';
+  if (d < 30)  return `${d} days ago`;
+  if (d < 365) return `${Math.floor(d/30)} mo ago`;
+  return `${Math.floor(d/365)}y ago`;
+}
+
+function statusLabel(s) {
+  return { playing:'Playing', backlog:'Backlog', completed:'Completed', dropped:'Dropped', wishlist:'Wishlist' }[s] || '';
+}
+
+function mcColor(score) {
+  if (!score) return '';
+  return score >= 75 ? 'mc-green' : score >= 50 ? 'mc-yellow' : 'mc-red';
+}
+
+function toast(msg, type = '') {
+  const el = document.createElement('div');
+  el.className = `toast${type ? ' toast-' + type : ''}`;
+  el.textContent = msg;
+  document.getElementById('toast-container').appendChild(el);
+  setTimeout(() => el.remove(), 3200);
+}
+
+function debounce(fn, ms) {
+  let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); };
+}
+
+function $id(id) { return document.getElementById(id); }
+
+// ── Theme ─────────────────────────────────────────────────────────────────────
+
+function applyTheme(t) {
+  document.documentElement.setAttribute('data-theme', t);
+  localStorage.setItem('games-theme', t);
+  $id('dd-theme-dark').classList.toggle('active', t === 'dark');
+  $id('dd-theme-light').classList.toggle('active', t === 'light');
+}
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+
+async function init() {
+  applyTheme(localStorage.getItem('games-theme') || 'dark');
+  try {
+    const status = await api('GET', '/api/auth/status');
+    if (status.needsSetup) { showAuth('setup'); return; }
+    if (!status.loggedIn)  { window.location.href = getHubUrl(); return; }
+    currentUser = status.user;
+    await loadApp();
+  } catch { window.location.href = getHubUrl(); }
+}
+
+async function loadApp() {
+  setUserChip();
+  $id('auth-screen').classList.add('hidden');
+  $id('app').classList.remove('hidden');
+
+  if (currentUser.role === 'admin') {
+    $id('nav-admin').classList.remove('hidden');
+    $id('dd-admin').classList.remove('hidden');
+  }
+
+  await refreshData();
+  switchView('home');
+  setupEvents();
+  await refreshDropdownStats();
+}
+
+async function refreshData() {
+  [games, genres, platforms] = await Promise.all([
+    api('GET', '/api/games'),
+    api('GET', '/api/genres'),
+    api('GET', '/api/platforms'),
+  ]);
+}
+
+function setUserChip() {
+  const name = `${currentUser.firstName || ''} ${currentUser.lastName || ''}`.trim() || currentUser.username;
+  const initial = (currentUser.firstName?.[0] || currentUser.username[0]).toUpperCase();
+  [$id('user-avatar'), $id('user-avatar-lg')].forEach(el => { if (el) el.textContent = initial; });
+  if ($id('user-full-name')) $id('user-full-name').textContent = name;
+  if ($id('user-username'))  $id('user-username').textContent  = '@' + currentUser.username;
+}
+
+async function refreshDropdownStats() {
+  try {
+    const stats = await api('GET', '/api/library/stats');
+    const el = $id('dd-library-stats');
+    if (el) el.innerHTML =
+      `<div>${stats.total} game${stats.total !== 1 ? 's' : ''} in library</div>` +
+      `<div>${formatPlaytime(stats.totalPlaytimeMin)} played</div>` +
+      `<div>${stats.byStatus.playing || 0} playing · ${stats.byStatus.completed || 0} completed</div>`;
+  } catch {}
+}
+
+// ── Auth screen ───────────────────────────────────────────────────────────────
+
+function showAuth(mode) {
+  $id('app').classList.add('hidden');
+  $id('auth-screen').classList.remove('hidden');
+  if (mode === 'setup') {
+    $id('auth-title').textContent = 'Create Account';
+    $id('auth-sub').textContent   = 'Administrator setup';
+    $id('auth-name-row').classList.remove('hidden');
+    $id('auth-submit').textContent = 'Create Account';
+    $id('auth-submit').onclick = doSetup;
+  } else {
+    $id('auth-title').textContent = 'Welcome Back';
+    $id('auth-sub').textContent   = '';
+    $id('auth-name-row').classList.add('hidden');
+    $id('auth-submit').textContent = 'Sign In';
+    $id('auth-submit').onclick = doLogin;
+  }
+}
+
+async function doLogin() {
+  const username = $id('auth-username').value.trim();
+  const password = $id('auth-password').value;
+  setAuthError('');
+  try {
+    const data = await api('POST', '/api/auth/login', { username, password });
+    token = data.token;
+    localStorage.setItem('tkn_games', token);
+    currentUser = data.user;
+    await loadApp();
+  } catch (err) { setAuthError(err.message); }
+}
+
+async function doSetup() {
+  const username  = $id('auth-username').value.trim();
+  const password  = $id('auth-password').value;
+  const firstName = $id('auth-first').value.trim();
+  const lastName  = $id('auth-last').value.trim();
+  setAuthError('');
+  try {
+    const data = await api('POST', '/api/auth/setup', { username, password, firstName, lastName });
+    token = data.token;
+    localStorage.setItem('tkn_games', token);
+    currentUser = data.user;
+    await loadApp();
+  } catch (err) { setAuthError(err.message); }
+}
+
+function setAuthError(msg) {
+  const el = $id('auth-error');
+  el.textContent = msg;
+  el.classList.toggle('hidden', !msg);
+}
+
+// ── View Switching ────────────────────────────────────────────────────────────
+
+function switchView(name) {
+  activeView = name;
+  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+  const target = document.querySelector(`.view[data-view="${name}"]`);
+  if (target) target.classList.add('active');
+  document.querySelectorAll('.nav-item').forEach(n => {
+    n.classList.toggle('nav-item--active', n.dataset.view === name);
+  });
+  if (name === 'home')    renderHome();
+  if (name === 'library') renderLibrary();
+  if (name === 'search')  renderSearch();
+  if (name === 'admin')   renderAdmin();
+}
+
+// ── Hero Banner ───────────────────────────────────────────────────────────────
+
+function buildHeroGames() {
+  // Prioritise: currently playing > highest metacritic > newest
+  const playing   = games.filter(g => g.libraryEntry?.status === 'playing');
+  const rest      = games.filter(g => g.libraryEntry?.status !== 'playing');
+  const sorted    = rest.slice().sort((a, b) => (b.metacritic || 0) - (a.metacritic || 0));
+  const pool      = [...playing, ...sorted];
+  heroGames       = pool.filter(g => g.hero_url || g.cover_url).slice(0, 6);
+  if (!heroGames.length) heroGames = games.slice(0, 6);
+}
+
+function renderHero() {
+  buildHeroGames();
+  if (!heroGames.length) { $id('hero-banner').style.display = 'none'; return; }
+  $id('hero-banner').style.display = '';
+  heroIndex = 0;
+  renderHeroDots();
+  setHeroSlide(0);
+  startHeroRotation();
+}
+
+function renderHeroDots() {
+  $id('hero-dots').innerHTML = heroGames.map((_, i) =>
+    `<button class="hero-dot${i === 0 ? ' active' : ''}" data-i="${i}"></button>`
+  ).join('');
+}
+
+function setHeroSlide(i) {
+  heroIndex = ((i % heroGames.length) + heroGames.length) % heroGames.length;
+  const g = heroGames[heroIndex];
+  const bg = $id('hero-bg');
+  bg.style.backgroundImage = `url(${esc(g.hero_url || g.cover_url)})`;
+
+  const badge = $id('hero-status-badge');
+  const status = g.libraryEntry?.status;
+  if (status) {
+    badge.textContent = statusLabel(status);
+    badge.className = '';
+    badge.style.cssText = '';
+    const colors = { playing:'var(--accent)', completed:'var(--success)', backlog:'var(--surface-3)', dropped:'var(--danger)', wishlist:'#5B4F9E' };
+    badge.style.background = colors[status] || 'var(--surface-3)';
+    badge.style.color = '#fff';
+    badge.style.padding = '3px 10px'; badge.style.borderRadius = '3px';
+    badge.style.fontSize = '10px'; badge.style.fontWeight = '700';
+    badge.style.textTransform = 'uppercase'; badge.style.letterSpacing = '.12em';
+    badge.style.marginBottom = '10px'; badge.style.display = 'inline-block';
+    badge.classList.remove('hidden');
+  } else { badge.classList.add('hidden'); }
+
+  $id('hero-title').textContent = g.title;
+  $id('hero-description').textContent = g.description || '';
+  $id('hero-meta').innerHTML = [
+    g.release_year ? `<span class="chip">${g.release_year}</span>` : '',
+    ...(g.genres || []).slice(0, 3).map(gn => `<span class="chip">${esc(gn)}</span>`),
+    g.metacritic ? `<span class="chip ${mcColor(g.metacritic)}">${g.metacritic}</span>` : '',
+  ].join('');
+
+  document.querySelectorAll('.hero-dot').forEach((d, idx) =>
+    d.classList.toggle('active', idx === heroIndex)
+  );
+  $id('hero-detail-btn').onclick = () => openDetailModal(g.id);
+  $id('hero-play-btn').onclick   = () => openDetailModal(g.id);
+}
+
+function startHeroRotation() {
+  clearInterval(heroTimer);
+  if (heroGames.length > 1) heroTimer = setInterval(() => setHeroSlide(heroIndex + 1), 7000);
+}
+
+// ── Shelf System ──────────────────────────────────────────────────────────────
+
+function renderHome() {
+  renderHero();
+  const container = $id('shelves-container');
+  container.innerHTML = '';
+
+  const gamesInStatus = s => games.filter(g => g.libraryEntry?.status === s);
+  const newestGames   = games.slice().sort((a,b) => b.created_at?.localeCompare(a.created_at)).slice(0, 20);
+  const topRated      = games.slice().sort((a,b) => (b.metacritic||0) - (a.metacritic||0)).filter(g => g.metacritic).slice(0, 20);
+
+  const shelves = [
+    { id: 'continue',  label: 'Continue Playing',   list: gamesInStatus('playing') },
+    { id: 'new',       label: 'New to the Catalog',  list: newestGames },
+    { id: 'backlog',   label: 'Your Backlog',         list: gamesInStatus('backlog') },
+    { id: 'top-rated', label: 'Top Rated',            list: topRated },
+    { id: 'completed', label: 'Completed',            list: gamesInStatus('completed') },
+    { id: 'wishlist',  label: 'Wishlist',             list: gamesInStatus('wishlist') },
+    { id: 'all',       label: 'All Games',            list: games },
+  ];
+
+  for (const s of shelves) {
+    if (!s.list.length) continue;
+    container.insertAdjacentHTML('beforeend', renderShelf(s.id, s.label, s.list));
+  }
+
+  // Attach shelf scroll arrow events
+  container.querySelectorAll('.shelf-arrow').forEach(btn => {
+    btn.addEventListener('click', e => {
+      const shelf = btn.closest('.shelf');
+      const track = shelf.querySelector('.shelf-track');
+      const dir   = btn.classList.contains('shelf-arrow--right') ? 1 : -1;
+      track.scrollBy({ left: dir * (160 * 3), behavior: 'smooth' });
+    });
+  });
+  container.querySelectorAll('.shelf-see-all').forEach(btn => {
+    btn.addEventListener('click', () => switchView('library'));
+  });
+  attachCardClicks(container);
+}
+
+function renderShelf(id, label, list) {
+  return `
+    <section class="shelf" id="shelf-${id}">
+      <div class="shelf-header">
+        <h2 class="shelf-title">${esc(label)}</h2>
+        <button class="shelf-see-all">See All</button>
+      </div>
+      <div class="shelf-track" id="shelf-track-${id}">
+        ${list.map(renderGameCard).join('')}
+      </div>
+      <button class="shelf-arrow shelf-arrow--left">&#8249;</button>
+      <button class="shelf-arrow shelf-arrow--right">&#8250;</button>
+    </section>`;
+}
+
+// ── Game Card ─────────────────────────────────────────────────────────────────
+
+function renderGameCard(g) {
+  const status  = g.libraryEntry?.status || g.status || '';
+  const mc      = g.metacritic;
+  const chips   = (g.platforms || []).slice(0, 2).map(p => `<span class="chip" style="font-size:9px">${esc(p)}</span>`).join('');
+  const mcBadge = mc ? `<span class="game-card-mc ${mcColor(mc)}">${mc}</span>` : '';
+  const badge   = status ? `<div class="game-card-badge">${esc(statusLabel(status))}</div>` : '';
+  const style   = g.cover_url
+    ? `background-image:url(${esc(g.cover_url)})`
+    : 'background:linear-gradient(135deg,var(--surface-2),var(--surface-3))';
+
+  return `
+    <div class="game-card${status ? ' status-' + status : ''}" data-id="${esc(g.id)}" style="${style}">
+      ${badge}
+      ${!g.cover_url ? `<div class="game-card-no-cover">${esc(g.title)}</div>` : ''}
+      <div class="game-card-overlay">
+        <div class="game-card-title">${esc(g.title)}</div>
+        <div class="game-card-dev">${esc(g.developer || '')}</div>
+        <div class="game-card-chips">${chips}</div>
+        ${mcBadge}
+      </div>
+    </div>`;
+}
+
+function attachCardClicks(root) {
+  root.querySelectorAll('.game-card[data-id]').forEach(card => {
+    card.addEventListener('click', () => openDetailModal(card.dataset.id));
+  });
+}
+
+// ── Library View ──────────────────────────────────────────────────────────────
+
+function renderLibrary() {
+  const filtered = filterStatus
+    ? games.filter(g => g.libraryEntry?.status === filterStatus)
+    : games.filter(g => g.libraryEntry);
+  const grid = $id('library-grid');
+
+  if (!filtered.length) {
+    grid.innerHTML = `<div class="empty-state"><strong>Nothing here yet.</strong><p>Add games to your library from the home screen or Browse.</p></div>`;
+  } else {
+    grid.innerHTML = filtered.map(renderGameCard).join('');
+    attachCardClicks(grid);
+  }
+
+  const total = games.filter(g => g.libraryEntry).length;
+  $id('library-stats-bar').textContent = total
+    ? `${total} game${total !== 1 ? 's' : ''} in your library`
+    : 'Your library is empty.';
+}
+
+// ── Browse / Search View ──────────────────────────────────────────────────────
+
+function renderSearch() {
+  renderFilterStrips();
+  applySearchFilter();
+}
+
+function renderFilterStrips() {
+  $id('genre-filter-strip').innerHTML =
+    `<button class="filter-chip${!filterGenre ? ' active' : ''}" data-type="genre" data-val="">All Genres</button>` +
+    genres.map(g =>
+      `<button class="filter-chip${filterGenre === g.name ? ' active' : ''}" data-type="genre" data-val="${esc(g.name)}">${esc(g.name)}</button>`
+    ).join('');
+
+  $id('platform-filter-strip').innerHTML =
+    `<button class="filter-chip${!filterPlatform ? ' active' : ''}" data-type="platform" data-val="">All Platforms</button>` +
+    platforms.map(p =>
+      `<button class="filter-chip${filterPlatform === p.name ? ' active' : ''}" data-type="platform" data-val="${esc(p.name)}">${esc(p.name)}</button>`
+    ).join('');
+
+  document.querySelectorAll('.filter-chip').forEach(btn => {
+    btn.addEventListener('click', () => {
+      if (btn.dataset.type === 'genre')    { filterGenre    = btn.dataset.val; }
+      if (btn.dataset.type === 'platform') { filterPlatform = btn.dataset.val; }
+      renderSearch();
+    });
+  });
+}
+
+function applySearchFilter() {
+  let result = games;
+  if (searchQuery)   result = result.filter(g => g.title.toLowerCase().includes(searchQuery.toLowerCase()) || (g.developer || '').toLowerCase().includes(searchQuery.toLowerCase()));
+  if (filterGenre)   result = result.filter(g => (g.genres || []).includes(filterGenre));
+  if (filterPlatform) result = result.filter(g => (g.platforms || []).includes(filterPlatform));
+
+  const grid = $id('search-results-grid');
+  if (!result.length) {
+    grid.innerHTML = `<div class="empty-state"><strong>No games found.</strong><p>Try different filters or add games via the Admin panel.</p></div>`;
+  } else {
+    grid.innerHTML = result.map(renderGameCard).join('');
+    attachCardClicks(grid);
+  }
+}
+
+// ── Detail Modal ──────────────────────────────────────────────────────────────
+
+async function openDetailModal(gameId) {
+  activeGameId = gameId;
+  const modal = $id('game-detail-modal');
+  modal.classList.remove('hidden');
+  document.body.style.overflow = 'hidden';
+
+  const game = games.find(g => g.id === gameId);
+  if (!game) return;
+
+  renderModalInfo(game);
+  renderModalControls(game);
+  await loadModalPlaytime(game);
+}
+
+function closeDetailModal() {
+  $id('game-detail-modal').classList.add('hidden');
+  document.body.style.overflow = '';
+  activeGameId = null;
+}
+
+function renderModalInfo(game) {
+  // Hero image
+  const heroSrc = game.hero_url || game.cover_url;
+  const img = $id('modal-hero-img');
+  if (heroSrc) { img.src = heroSrc; img.style.display = ''; }
+  else          { img.style.display = 'none'; }
+
+  // Metacritic badge
+  const mcBadge = $id('modal-metacritic-badge');
+  if (game.metacritic) {
+    mcBadge.textContent = game.metacritic;
+    mcBadge.className   = `mc-badge ${mcColor(game.metacritic)}`;
+    mcBadge.style.padding = '4px 10px'; mcBadge.style.borderRadius = '5px';
+    mcBadge.style.fontWeight = '800'; mcBadge.style.fontSize = '13px'; mcBadge.style.zIndex = '2';
+    mcBadge.classList.remove('hidden');
+  } else { mcBadge.classList.add('hidden'); }
+
+  $id('modal-title').textContent = game.title;
+
+  // Meta row
+  $id('modal-meta-row').innerHTML = [
+    game.release_year ? `<span class="modal-meta-item">${game.release_year}</span>` : '',
+    game.developer    ? `<span class="modal-meta-item">by ${esc(game.developer)}</span>` : '',
+    game.publisher && game.publisher !== game.developer ? `<span class="modal-meta-item">${esc(game.publisher)}</span>` : '',
+    game.rating_esrb  ? `<span class="chip">${esc(game.rating_esrb)}</span>` : '',
+  ].join('<span class="modal-meta-item" style="color:var(--border)">·</span>');
+
+  // Chips row
+  $id('modal-chips-row').innerHTML = [
+    ...(game.genres   || []).map(g => `<span class="chip chip-accent">${esc(g)}</span>`),
+    ...(game.platforms || []).map(p => `<span class="chip">${esc(p)}</span>`),
+    ...(game.tags      || []).map(t => `<span class="chip">${esc(t)}</span>`),
+  ].join('');
+
+  $id('modal-description').textContent = game.description || '';
+
+  // Trailer
+  const trailerWrap = $id('modal-trailer');
+  if (game.trailer_url) {
+    const embedUrl = game.trailer_url.replace('watch?v=', 'embed/').replace('youtu.be/', 'www.youtube.com/embed/');
+    $id('modal-trailer-iframe').src = embedUrl;
+    trailerWrap.classList.remove('hidden');
+  } else {
+    trailerWrap.classList.add('hidden');
+    $id('modal-trailer-iframe').src = '';
+  }
+}
+
+function renderModalControls(game) {
+  const entry = game.libraryEntry;
+  currentRating = entry?.user_rating || 0;
+
+  $id('modal-status').value = entry?.status || '';
+  $id('modal-notes').value  = entry?.notes  || '';
+  $id('modal-started-at').value   = entry?.started_at   || '';
+  $id('modal-completed-at').value = entry?.completed_at || '';
+  renderStars(currentRating);
+
+  $id('modal-save-btn').onclick   = saveModalEntry;
+  $id('modal-remove-btn').onclick = removeModalEntry;
+  $id('modal-remove-btn').style.display = entry ? '' : 'none';
+}
+
+function renderStars(rating) {
+  $id('modal-rating-stars').innerHTML = Array.from({ length: 10 }, (_, i) => {
+    const n = i + 1;
+    return `<button class="star${n <= rating ? ' filled' : ''}" data-n="${n}" title="${n}/10">★</button>`;
+  }).join('');
+  $id('modal-rating-stars').querySelectorAll('.star').forEach(s => {
+    s.addEventListener('click', () => {
+      currentRating = parseInt(s.dataset.n);
+      renderStars(currentRating);
+    });
+    s.addEventListener('mouseenter', () => {
+      const n = parseInt(s.dataset.n);
+      $id('modal-rating-stars').querySelectorAll('.star').forEach((st, idx) =>
+        st.classList.toggle('filled', idx < n)
+      );
+    });
+    s.addEventListener('mouseleave', () => renderStars(currentRating));
+  });
+}
+
+async function saveModalEntry() {
+  if (!activeGameId) return;
+  const status      = $id('modal-status').value;
+  const user_rating = currentRating || null;
+  const notes       = $id('modal-notes').value;
+  const started_at  = $id('modal-started-at').value || null;
+  const completed_at = $id('modal-completed-at').value || null;
+  try {
+    if (!status) {
+      await api('DELETE', `/api/library/${activeGameId}`);
+    } else {
+      await api('PUT', `/api/library/${activeGameId}`, { status, user_rating, notes, started_at, completed_at });
+    }
+    await refreshData();
+    const updated = games.find(g => g.id === activeGameId);
+    if (updated) {
+      renderModalControls(updated);
+      updateCardInDOM(updated);
+    }
+    $id('modal-remove-btn').style.display = status ? '' : 'none';
+    toast('Saved', 'success');
+    await refreshDropdownStats();
+  } catch (err) { toast(err.message, 'error'); }
+}
+
+async function removeModalEntry() {
+  if (!activeGameId) return;
+  try {
+    await api('DELETE', `/api/library/${activeGameId}`);
+    await refreshData();
+    const updated = games.find(g => g.id === activeGameId);
+    if (updated) { renderModalControls(updated); updateCardInDOM(updated); }
+    toast('Removed from library');
+    await refreshDropdownStats();
+  } catch (err) { toast(err.message, 'error'); }
+}
+
+function updateCardInDOM(game) {
+  document.querySelectorAll(`.game-card[data-id="${game.id}"]`).forEach(card => {
+    const parent = card.parentElement;
+    const newCard = document.createElement('div');
+    newCard.innerHTML = renderGameCard(game);
+    const newEl = newCard.firstElementChild;
+    parent.replaceChild(newEl, card);
+    newEl.addEventListener('click', () => openDetailModal(game.id));
+  });
+}
+
+async function loadModalPlaytime(game) {
+  const playtime = await api('GET', `/api/games/${game.id}/playtime`);
+  const openSession = activeSessions[game.id];
+
+  $id('modal-playtime-total').innerHTML =
+    `${formatPlaytime(playtime.total_min)}<span>total playtime</span>`;
+
+  // Session controls
+  const ctrl = $id('modal-session-controls');
+  if (openSession) {
+    ctrl.innerHTML = `
+      <div class="session-active">
+        <div class="session-active-dot"></div>
+        <span style="font-size:12px;flex:1">Session in progress…</span>
+        <button class="btn btn-accent btn-sm" id="end-session-btn">End Session</button>
+      </div>`;
+    $id('end-session-btn').onclick = () => endActiveSession(game.id);
+  } else {
+    ctrl.innerHTML = `<button class="btn btn-accent btn-sm" id="start-session-btn">Start Session</button>`;
+    $id('start-session-btn').onclick = () => startActiveSession(game.id);
+  }
+
+  // Session list
+  $id('modal-session-list').innerHTML = playtime.sessions
+    .filter(s => s.ended_at)
+    .slice(0, 10)
+    .map(s => `
+      <div class="session-item">
+        <span class="session-dur">${formatPlaytime(s.duration_min)}</span>
+        <span class="session-date">${timeAgo(s.started_at)}</span>
+        ${s.notes ? `<span class="session-note">${esc(s.notes)}</span>` : ''}
+        <button class="session-del" data-sid="${s.id}" title="Delete">×</button>
+      </div>`
+    ).join('');
+
+  $id('modal-session-list').querySelectorAll('.session-del').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      try {
+        await api('DELETE', `/api/games/${game.id}/sessions/${btn.dataset.sid}`);
+        await loadModalPlaytime(game);
+      } catch (err) { toast(err.message, 'error'); }
+    });
+  });
+
+  // Manual session form
+  $id('modal-add-session-btn').onclick = () =>
+    $id('modal-manual-session').classList.toggle('hidden');
+  $id('ms-save-btn').onclick = async () => {
+    const start = $id('ms-start').value;
+    const end   = $id('ms-end').value;
+    if (!start || !end) { toast('Fill in start and end times', 'error'); return; }
+    const dur = Math.max(0, Math.floor((new Date(end) - new Date(start)) / 60000));
+    const notes = $id('ms-notes').value;
+    try {
+      await api('POST', `/api/games/${game.id}/sessions`, { started_at: new Date(start).toISOString(), ended_at: new Date(end).toISOString(), duration_min: dur, notes });
+      $id('modal-manual-session').classList.add('hidden');
+      $id('ms-start').value = ''; $id('ms-end').value = ''; $id('ms-notes').value = '';
+      await loadModalPlaytime(game);
+      toast('Session added', 'success');
+    } catch (err) { toast(err.message, 'error'); }
+  };
+}
+
+async function startActiveSession(gameId) {
+  try {
+    const session = await api('POST', `/api/games/${gameId}/sessions/start`);
+    activeSessions[gameId] = session;
+    const game = games.find(g => g.id === gameId);
+    if (game) await loadModalPlaytime(game);
+    toast('Session started');
+  } catch (err) { toast(err.message, 'error'); }
+}
+
+async function endActiveSession(gameId) {
+  const session = activeSessions[gameId];
+  if (!session) return;
+  try {
+    await api('POST', `/api/games/${gameId}/sessions/${session.id}/end`);
+    delete activeSessions[gameId];
+    const game = games.find(g => g.id === gameId);
+    if (game) await loadModalPlaytime(game);
+    toast('Session ended', 'success');
+  } catch (err) { toast(err.message, 'error'); }
+}
+
+// ── Admin View ────────────────────────────────────────────────────────────────
+
+function renderAdmin() {
+  renderAdminCatalog();
+  document.querySelectorAll('.admin-tab').forEach(tab => {
+    tab.addEventListener('click', () => switchAdminTab(tab.dataset.atab));
+  });
+}
+
+function switchAdminTab(name) {
+  document.querySelectorAll('.admin-tab').forEach(t =>
+    t.classList.toggle('active', t.dataset.atab === name)
+  );
+  document.querySelectorAll('.admin-tab-panel').forEach(p =>
+    p.classList.toggle('hidden', p.id !== `admin-tab-${name}`)
+  );
+  if (name === 'catalog')   renderAdminCatalog();
+  if (name === 'add-game')  renderGameForm(null);
+  if (name === 'genres')    renderGenresAdmin();
+  if (name === 'platforms') renderPlatformsAdmin();
+}
+
+function renderAdminCatalog() {
+  const wrap = $id('admin-game-table-wrap');
+  if (!games.length) {
+    wrap.innerHTML = `<div class="empty-state"><strong>No games yet.</strong><p>Use the Add Game tab to create the first one.</p></div>`;
+    return;
+  }
+  wrap.innerHTML = `
+    <div style="margin-bottom:12px;text-align:right">
+      <button class="btn btn-accent btn-sm" id="admin-add-game-quick">+ Add Game</button>
+    </div>
+    <table class="admin-game-table">
+      <thead><tr>
+        <th></th><th>Title</th><th>Developer</th><th>Year</th><th>Platforms</th><th>Metacritic</th><th></th>
+      </tr></thead>
+      <tbody>
+        ${games.map(g => `
+          <tr>
+            <td>${g.cover_url ? `<img src="${esc(g.cover_url)}" alt="" loading="lazy">` : '<div class="admin-cover-placeholder"></div>'}</td>
+            <td><strong>${esc(g.title)}</strong></td>
+            <td>${esc(g.developer || '—')}</td>
+            <td>${g.release_year || '—'}</td>
+            <td>${(g.platforms||[]).slice(0,2).join(', ') || '—'}</td>
+            <td>${g.metacritic || '—'}</td>
+            <td style="white-space:nowrap">
+              <button class="btn btn-ghost btn-sm" data-edit="${esc(g.id)}">Edit</button>
+              <button class="btn btn-danger btn-sm" data-del="${esc(g.id)}" style="margin-left:4px">Del</button>
+            </td>
+          </tr>`
+        ).join('')}
+      </tbody>
+    </table>`;
+
+  $id('admin-add-game-quick').onclick = () => switchAdminTab('add-game');
+
+  wrap.querySelectorAll('[data-edit]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      switchAdminTab('add-game');
+      renderGameForm(btn.dataset.edit);
+    });
+  });
+  wrap.querySelectorAll('[data-del]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      if (!confirm('Delete this game? This cannot be undone.')) return;
+      try {
+        await api('DELETE', `/api/games/${btn.dataset.del}`);
+        await refreshData();
+        renderAdminCatalog();
+        toast('Game deleted');
+      } catch (err) { toast(err.message, 'error'); }
+    });
+  });
+}
+
+function renderGameForm(gameId) {
+  editingGameId = gameId || null;
+  const game = gameId ? games.find(g => g.id === gameId) : null;
+  const v = k => esc(game?.[k] || '');
+  const arr = k => (game?.[k] || []).join(', ');
+
+  $id('admin-game-form').innerHTML = `
+    <h3 style="margin-bottom:20px;font-size:16px">${game ? 'Edit' : 'Add'} Game</h3>
+    <div class="form-row-two">
+      <div class="field-wrap"><label>Title *</label><input id="gf-title" value="${v('title')}" /></div>
+      <div class="field-wrap"><label>Developer</label><input id="gf-dev" value="${v('developer')}" /></div>
+    </div>
+    <div class="form-row-two">
+      <div class="field-wrap"><label>Publisher</label><input id="gf-pub" value="${v('publisher')}" /></div>
+      <div class="field-wrap"><label>Release Year</label><input id="gf-year" type="number" value="${game?.release_year || ''}" /></div>
+    </div>
+    <div class="field-wrap"><label>Description</label><textarea id="gf-desc" rows="3">${v('description')}</textarea></div>
+    <div class="form-row-two">
+      <div class="field-wrap"><label>Cover Image URL</label><input id="gf-cover" value="${v('cover_url')}" placeholder="https://…" /></div>
+      <div class="field-wrap"><label>Hero/Banner Image URL</label><input id="gf-hero" value="${v('hero_url')}" placeholder="https://…" /></div>
+    </div>
+    <div class="form-row-two">
+      <div class="field-wrap"><label>Genres (comma-separated)</label><input id="gf-genres" value="${arr('genres')}" /></div>
+      <div class="field-wrap"><label>Platforms (comma-separated)</label><input id="gf-platforms" value="${arr('platforms')}" /></div>
+    </div>
+    <div class="form-row-two">
+      <div class="field-wrap"><label>Tags (comma-separated)</label><input id="gf-tags" value="${arr('tags')}" /></div>
+      <div class="field-wrap"><label>ESRB Rating</label>
+        <select id="gf-esrb">
+          <option value="">—</option>
+          ${['E','E10+','T','M','AO'].map(r => `<option${game?.rating_esrb === r ? ' selected' : ''}>${r}</option>`).join('')}
+        </select>
+      </div>
+    </div>
+    <div class="form-row-two">
+      <div class="field-wrap"><label>Metacritic (0–100)</label><input id="gf-mc" type="number" min="0" max="100" value="${game?.metacritic || ''}" /></div>
+      <div class="field-wrap"><label>Trailer URL (YouTube)</label><input id="gf-trailer" value="${v('trailer_url')}" placeholder="https://youtube.com/…" /></div>
+    </div>
+    <div style="display:flex;gap:10px;margin-top:20px">
+      <button class="btn btn-accent" id="gf-save">${game ? 'Save Changes' : 'Add Game'}</button>
+      ${game ? '<button class="btn btn-ghost" id="gf-cancel">Cancel</button>' : ''}
+    </div>
+    <div id="gf-error" class="field-error hidden" style="margin-top:8px"></div>`;
+
+  $id('gf-save').onclick = saveGameForm;
+  if ($id('gf-cancel')) $id('gf-cancel').onclick = () => switchAdminTab('catalog');
+}
+
+function parseCSV(str) {
+  return str.split(',').map(s => s.trim()).filter(Boolean);
+}
+
+async function saveGameForm() {
+  const title = $id('gf-title').value.trim();
+  if (!title) { $id('gf-error').textContent = 'Title is required'; $id('gf-error').classList.remove('hidden'); return; }
+  $id('gf-error').classList.add('hidden');
+  const payload = {
+    title,
+    developer:    $id('gf-dev').value.trim(),
+    publisher:    $id('gf-pub').value.trim(),
+    release_year: parseInt($id('gf-year').value) || null,
+    description:  $id('gf-desc').value.trim(),
+    cover_url:    $id('gf-cover').value.trim(),
+    hero_url:     $id('gf-hero').value.trim(),
+    genres:       parseCSV($id('gf-genres').value),
+    platforms:    parseCSV($id('gf-platforms').value),
+    tags:         parseCSV($id('gf-tags').value),
+    rating_esrb:  $id('gf-esrb').value || null,
+    metacritic:   parseInt($id('gf-mc').value) || null,
+    trailer_url:  $id('gf-trailer').value.trim() || null,
+  };
+  try {
+    if (editingGameId) {
+      await api('PUT', `/api/games/${editingGameId}`, payload);
+      toast('Game updated', 'success');
+    } else {
+      await api('POST', '/api/games', payload);
+      toast('Game added', 'success');
+    }
+    await refreshData();
+    switchAdminTab('catalog');
+  } catch (err) {
+    $id('gf-error').textContent = err.message;
+    $id('gf-error').classList.remove('hidden');
+  }
+}
+
+function renderGenresAdmin() {
+  $id('admin-genres-list').innerHTML = `<div class="admin-lookup-list">${
+    genres.map(g => `
+      <div class="admin-lookup-item">
+        ${esc(g.name)}
+        <button class="admin-lookup-delete" data-id="${g.id}" title="Delete">×</button>
+      </div>`
+    ).join('')
+  }</div>`;
+  $id('admin-genres-list').querySelectorAll('.admin-lookup-delete').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      try { await api('DELETE', `/api/genres/${btn.dataset.id}`); genres = await api('GET', '/api/genres'); renderGenresAdmin(); }
+      catch (err) { toast(err.message, 'error'); }
+    });
+  });
+  $id('genre-add-btn').onclick = async () => {
+    const name = $id('genre-input').value.trim();
+    if (!name) return;
+    try { await api('POST', '/api/genres', { name }); $id('genre-input').value = ''; genres = await api('GET', '/api/genres'); renderGenresAdmin(); }
+    catch (err) { toast(err.message, 'error'); }
+  };
+}
+
+function renderPlatformsAdmin() {
+  $id('admin-platforms-list').innerHTML = `<div class="admin-lookup-list">${
+    platforms.map(p => `
+      <div class="admin-lookup-item">
+        ${esc(p.name)}
+        <button class="admin-lookup-delete" data-id="${p.id}" title="Delete">×</button>
+      </div>`
+    ).join('')
+  }</div>`;
+  $id('admin-platforms-list').querySelectorAll('.admin-lookup-delete').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      try { await api('DELETE', `/api/platforms/${btn.dataset.id}`); platforms = await api('GET', '/api/platforms'); renderPlatformsAdmin(); }
+      catch (err) { toast(err.message, 'error'); }
+    });
+  });
+  $id('platform-add-btn').onclick = async () => {
+    const name = $id('platform-input').value.trim();
+    if (!name) return;
+    try { await api('POST', '/api/platforms', { name }); $id('platform-input').value = ''; platforms = await api('GET', '/api/platforms'); renderPlatformsAdmin(); }
+    catch (err) { toast(err.message, 'error'); }
+  };
+}
+
+// ── Event Setup ───────────────────────────────────────────────────────────────
+
+function setupEvents() {
+  // Nav sidebar
+  document.querySelectorAll('.nav-item[data-view]').forEach(btn => {
+    btn.addEventListener('click', () => switchView(btn.dataset.view));
+  });
+
+  // Header search
+  $id('search-input').addEventListener('input', debounce(e => {
+    searchQuery = e.target.value.trim();
+    if (activeView !== 'search') switchView('search');
+    else applySearchFilter();
+  }, 300));
+  $id('search-input').addEventListener('keydown', e => {
+    if (e.key === 'Enter' && activeView !== 'search') switchView('search');
+  });
+
+  // User dropdown
+  $id('user-avatar-btn').addEventListener('click', e => {
+    e.stopPropagation();
+    $id('user-dropdown').classList.toggle('hidden');
+  });
+  document.addEventListener('click', e => {
+    if (!$id('user-avatar-wrap').contains(e.target))
+      $id('user-dropdown').classList.add('hidden');
+  });
+
+  // Theme buttons
+  $id('dd-theme-dark').addEventListener('click',  () => applyTheme('dark'));
+  $id('dd-theme-light').addEventListener('click', () => applyTheme('light'));
+
+  // Leave to Hub / Admin
+  $id('dd-leave').addEventListener('click', () => {
+    api('POST', '/api/auth/logout').catch(() => {});
+    localStorage.removeItem('tkn_games');
+    window.location.href = getHubUrl();
+  });
+  $id('dd-admin').addEventListener('click', () => {
+    $id('user-dropdown').classList.add('hidden');
+    switchView('admin');
+  });
+
+  // Library filter tabs
+  $id('library-filter-tabs').addEventListener('click', e => {
+    const tab = e.target.closest('.lib-tab');
+    if (!tab) return;
+    filterStatus = tab.dataset.status;
+    $id('library-filter-tabs').querySelectorAll('.lib-tab').forEach(t =>
+      t.classList.toggle('active', t === tab)
+    );
+    renderLibrary();
+  });
+
+  // Hero controls
+  $id('hero-prev').addEventListener('click', () => { clearInterval(heroTimer); setHeroSlide(heroIndex - 1); startHeroRotation(); });
+  $id('hero-next').addEventListener('click', () => { clearInterval(heroTimer); setHeroSlide(heroIndex + 1); startHeroRotation(); });
+  $id('hero-dots').addEventListener('click', e => {
+    const dot = e.target.closest('.hero-dot');
+    if (!dot) return;
+    clearInterval(heroTimer);
+    setHeroSlide(parseInt(dot.dataset.i));
+    startHeroRotation();
+  });
+  $id('hero-banner').addEventListener('mouseenter', () => clearInterval(heroTimer));
+  $id('hero-banner').addEventListener('mouseleave', () => startHeroRotation());
+
+  // Modal close
+  $id('modal-close').addEventListener('click', closeDetailModal);
+  $id('game-detail-modal').addEventListener('click', e => {
+    if (e.target === $id('game-detail-modal')) closeDetailModal();
+  });
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') closeDetailModal();
+  });
+}
+
+// ── Boot ──────────────────────────────────────────────────────────────────────
+init();

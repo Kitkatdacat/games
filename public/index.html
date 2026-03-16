@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Games</title>
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+
+  <!-- ── Auth screen ── -->
+  <div id="auth-screen" class="hidden">
+    <div class="auth-panel">
+      <div id="auth-form">
+        <h2 id="auth-title">Welcome Back</h2>
+        <p class="auth-sub" id="auth-sub"></p>
+        <div id="auth-name-row" class="form-row-two hidden">
+          <div class="field-wrap"><label>First name</label><input id="auth-first" type="text" autocomplete="given-name" /></div>
+          <div class="field-wrap"><label>Last name</label><input id="auth-last" type="text" autocomplete="family-name" /></div>
+        </div>
+        <div class="field-wrap"><label>Username</label><input id="auth-username" type="text" autocomplete="username" /></div>
+        <div class="field-wrap"><label>Password</label><input id="auth-password" type="password" autocomplete="current-password" /></div>
+        <div id="auth-error" class="field-error hidden"></div>
+        <button id="auth-submit" class="btn-primary">Sign In</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── App shell ── -->
+  <div id="app" class="hidden">
+
+    <header id="header">
+      <div class="header-left">
+        <svg class="app-logo" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <rect width="32" height="32" rx="6" fill="var(--accent)" opacity="0.15"/>
+          <path d="M8 16h4m-2-2v4M19 14h.01M22 14h.01M20.5 17a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3z" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+          <rect x="5" y="11" width="22" height="10" rx="3" stroke="var(--accent)" stroke-width="1.5"/>
+        </svg>
+        <span class="app-title">Games</span>
+      </div>
+      <div class="header-center">
+        <div class="search-wrap">
+          <svg class="search-icon" viewBox="0 0 20 20" fill="none"><circle cx="8.5" cy="8.5" r="5.5" stroke="var(--text-3)" stroke-width="1.5"/><path d="M15 15l-3-3" stroke="var(--text-3)" stroke-width="1.5" stroke-linecap="round"/></svg>
+          <input type="text" id="search-input" placeholder="Search games…" autocomplete="off" />
+        </div>
+      </div>
+      <div class="header-right">
+        <div class="user-avatar-wrap" id="user-avatar-wrap">
+          <button class="user-avatar-btn" id="user-avatar-btn">
+            <div class="user-avatar" id="user-avatar">?</div>
+          </button>
+          <div class="user-dropdown hidden" id="user-dropdown">
+            <div class="user-dropdown-header">
+              <div class="user-avatar user-avatar--lg" id="user-avatar-lg">?</div>
+              <div>
+                <div class="user-full-name" id="user-full-name"></div>
+                <div class="user-username" id="user-username"></div>
+              </div>
+            </div>
+            <div class="dropdown-divider"></div>
+            <div class="dropdown-stats" id="dd-library-stats">Loading…</div>
+            <div class="dropdown-divider"></div>
+            <div class="dropdown-section">
+              <span class="dropdown-label">Theme</span>
+              <div class="theme-toggle-group">
+                <button class="theme-btn-opt active" id="dd-theme-dark">Dark</button>
+                <button class="theme-btn-opt" id="dd-theme-light">Light</button>
+              </div>
+            </div>
+            <div class="dropdown-divider"></div>
+            <button class="dropdown-item hidden" id="dd-admin">
+              <svg viewBox="0 0 20 20" fill="none" width="14" height="14"><path d="M10 2a8 8 0 1 0 0 16A8 8 0 0 0 10 2zm0 3a1.5 1.5 0 1 1 0 3 1.5 1.5 0 0 1 0-3zm0 10a6 6 0 0 1-5-2.69c.02-1.66 3.33-2.57 5-2.57s4.98.91 5 2.57A6 6 0 0 1 10 15z" fill="var(--text-2)"/></svg>
+              Admin Panel
+            </button>
+            <button class="dropdown-item" id="dd-leave">
+              <svg viewBox="0 0 20 20" fill="none" width="14" height="14"><path d="M13 3H5a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h8M17 10H7m0 0 3-3m-3 3 3 3" stroke="var(--text-2)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              Leave to Hub
+            </button>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <div id="body-wrap">
+
+      <!-- ── Nav Sidebar ── -->
+      <nav id="nav-sidebar">
+        <button class="nav-item nav-item--active" data-view="home" id="nav-home">
+          <svg class="nav-icon" viewBox="0 0 20 20" fill="none"><path d="M3 9.5L10 3l7 6.5V17a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9.5z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><path d="M7 18v-6h6v6" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg>
+          <span class="nav-label">Home</span>
+        </button>
+        <button class="nav-item" data-view="library" id="nav-library">
+          <svg class="nav-icon" viewBox="0 0 20 20" fill="none"><rect x="2" y="3" width="7" height="9" rx="1" stroke="currentColor" stroke-width="1.5"/><rect x="11" y="3" width="7" height="5" rx="1" stroke="currentColor" stroke-width="1.5"/><rect x="11" y="10" width="7" height="7" rx="1" stroke="currentColor" stroke-width="1.5"/><rect x="2" y="14" width="7" height="3" rx="1" stroke="currentColor" stroke-width="1.5"/></svg>
+          <span class="nav-label">My Library</span>
+        </button>
+        <button class="nav-item" data-view="search" id="nav-search">
+          <svg class="nav-icon" viewBox="0 0 20 20" fill="none"><circle cx="8.5" cy="8.5" r="5.5" stroke="currentColor" stroke-width="1.5"/><path d="M15 15l-3-3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+          <span class="nav-label">Browse</span>
+        </button>
+        <button class="nav-item hidden" data-view="admin" id="nav-admin">
+          <svg class="nav-icon" viewBox="0 0 20 20" fill="none"><circle cx="10" cy="10" r="2" stroke="currentColor" stroke-width="1.5"/><path d="M10 2v2M10 16v2M2 10h2M16 10h2M4.22 4.22l1.42 1.42M14.36 14.36l1.42 1.42M4.22 15.78l1.42-1.42M14.36 5.64l1.42-1.42" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+          <span class="nav-label">Admin</span>
+        </button>
+      </nav>
+
+      <!-- ── Main Content ── -->
+      <main id="main-content">
+
+        <!-- Home View -->
+        <div class="view active" data-view="home" id="view-home">
+          <div id="hero-banner">
+            <div id="hero-bg"></div>
+            <div id="hero-gradient"></div>
+            <div id="hero-info">
+              <div id="hero-status-badge" class="hidden"></div>
+              <h1 id="hero-title"></h1>
+              <p id="hero-description"></p>
+              <div id="hero-meta"></div>
+              <div id="hero-actions">
+                <button id="hero-detail-btn" class="btn-hero-primary">More Info</button>
+                <button id="hero-play-btn" class="btn-hero-secondary">Log Session</button>
+              </div>
+            </div>
+            <div id="hero-dots"></div>
+            <button id="hero-prev" class="hero-arrow hero-arrow--left">&#8249;</button>
+            <button id="hero-next" class="hero-arrow hero-arrow--right">&#8250;</button>
+          </div>
+          <div id="shelves-container"></div>
+        </div>
+
+        <!-- Library View -->
+        <div class="view" data-view="library" id="view-library">
+          <div class="view-header">
+            <h2 class="view-title">My Library</h2>
+          </div>
+          <div id="library-filter-tabs">
+            <button class="lib-tab active" data-status="">All</button>
+            <button class="lib-tab" data-status="playing">Playing</button>
+            <button class="lib-tab" data-status="backlog">Backlog</button>
+            <button class="lib-tab" data-status="completed">Completed</button>
+            <button class="lib-tab" data-status="dropped">Dropped</button>
+            <button class="lib-tab" data-status="wishlist">Wishlist</button>
+          </div>
+          <div id="library-stats-bar"></div>
+          <div id="library-grid" class="game-grid"></div>
+        </div>
+
+        <!-- Browse / Search View -->
+        <div class="view" data-view="search" id="view-search">
+          <div class="view-header">
+            <h2 class="view-title">Browse</h2>
+          </div>
+          <div id="browse-filters">
+            <div id="genre-filter-strip" class="filter-strip"></div>
+            <div id="platform-filter-strip" class="filter-strip"></div>
+          </div>
+          <div id="search-results-grid" class="game-grid"></div>
+        </div>
+
+        <!-- Admin View -->
+        <div class="view" data-view="admin" id="view-admin">
+          <div class="view-header">
+            <h2 class="view-title">Admin</h2>
+          </div>
+          <div class="admin-tabs">
+            <button class="admin-tab active" data-atab="catalog">Catalog</button>
+            <button class="admin-tab" data-atab="add-game">Add Game</button>
+            <button class="admin-tab" data-atab="genres">Genres</button>
+            <button class="admin-tab" data-atab="platforms">Platforms</button>
+          </div>
+          <div id="admin-tab-catalog" class="admin-tab-panel">
+            <div id="admin-game-table-wrap"></div>
+          </div>
+          <div id="admin-tab-add-game" class="admin-tab-panel hidden">
+            <div id="admin-game-form"></div>
+          </div>
+          <div id="admin-tab-genres" class="admin-tab-panel hidden">
+            <div id="admin-genres-list"></div>
+            <div class="admin-add-row">
+              <input type="text" id="genre-input" placeholder="Genre name…" />
+              <button class="btn btn-accent" id="genre-add-btn">Add</button>
+            </div>
+          </div>
+          <div id="admin-tab-platforms" class="admin-tab-panel hidden">
+            <div id="admin-platforms-list"></div>
+            <div class="admin-add-row">
+              <input type="text" id="platform-input" placeholder="Platform name…" />
+              <button class="btn btn-accent" id="platform-add-btn">Add</button>
+            </div>
+          </div>
+        </div>
+
+      </main>
+    </div>
+  </div>
+
+  <!-- ── Game Detail Modal ── -->
+  <div id="game-detail-modal" class="modal-overlay hidden">
+    <div class="modal-box modal-box--game">
+      <button id="modal-close" class="modal-close">&#x2715;</button>
+      <div id="modal-hero-wrap">
+        <img id="modal-hero-img" src="" alt="" />
+        <div id="modal-hero-gradient"></div>
+        <div id="modal-metacritic-badge" class="hidden"></div>
+      </div>
+      <div class="modal-body">
+        <div class="modal-info-col">
+          <h2 id="modal-title"></h2>
+          <div id="modal-meta-row" class="modal-meta-row"></div>
+          <div id="modal-chips-row" class="modal-chips-row"></div>
+          <p id="modal-description"></p>
+          <div id="modal-trailer" class="hidden">
+            <div class="modal-section-title">Trailer</div>
+            <div class="modal-trailer-wrap">
+              <iframe id="modal-trailer-iframe" frameborder="0" allowfullscreen></iframe>
+            </div>
+          </div>
+        </div>
+        <div class="modal-controls-col">
+          <div class="modal-section">
+            <div class="modal-section-title">My Library</div>
+            <div class="field-wrap">
+              <label>Status</label>
+              <select id="modal-status">
+                <option value="">Not in Library</option>
+                <option value="wishlist">Wishlist</option>
+                <option value="backlog">Backlog</option>
+                <option value="playing">Playing</option>
+                <option value="completed">Completed</option>
+                <option value="dropped">Dropped</option>
+              </select>
+            </div>
+            <div class="field-wrap">
+              <label>My Rating</label>
+              <div id="modal-rating-stars" class="star-rating"></div>
+            </div>
+            <div class="field-wrap">
+              <label>Notes</label>
+              <textarea id="modal-notes" rows="3" placeholder="Personal notes…"></textarea>
+            </div>
+            <div class="form-row-two">
+              <div class="field-wrap">
+                <label>Started</label>
+                <input type="date" id="modal-started-at" />
+              </div>
+              <div class="field-wrap">
+                <label>Completed</label>
+                <input type="date" id="modal-completed-at" />
+              </div>
+            </div>
+            <button class="btn btn-accent" id="modal-save-btn">Save</button>
+            <button class="btn btn-ghost btn-sm" id="modal-remove-btn" style="margin-top:6px">Remove from library</button>
+          </div>
+          <div class="modal-section" id="modal-playtime-section">
+            <div class="modal-section-title">Playtime</div>
+            <div id="modal-playtime-total" class="playtime-total"></div>
+            <div id="modal-session-controls"></div>
+            <div id="modal-session-list"></div>
+            <button class="btn btn-ghost btn-sm" id="modal-add-session-btn" style="margin-top:8px">+ Add manual session</button>
+            <div id="modal-manual-session" class="hidden" style="margin-top:10px">
+              <div class="form-row-two">
+                <div class="field-wrap"><label>Start</label><input type="datetime-local" id="ms-start"/></div>
+                <div class="field-wrap"><label>End</label><input type="datetime-local" id="ms-end"/></div>
+              </div>
+              <div class="field-wrap"><label>Notes</label><input type="text" id="ms-notes" placeholder="Optional note…"/></div>
+              <button class="btn btn-accent btn-sm" id="ms-save-btn">Save session</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Toast container ── -->
+  <div id="toast-container"></div>
+
+  <script src="/app.js"></script>
+</body>
+</html>

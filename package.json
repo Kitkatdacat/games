@@ -1,0 +1,15 @@
+{
+  "name": "games",
+  "version": "1.0.0",
+  "description": "Personal gaming library hub",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "@hub/auth": "file:../shared",
+    "bcryptjs": "^3.0.3",
+    "better-sqlite3": "^9.4.3",
+    "express": "^4.18.2",
+    "uuid": "^9.0.0"
+  }
+}
