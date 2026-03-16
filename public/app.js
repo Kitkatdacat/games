@@ -11,6 +11,9 @@ function getHubUrl() {
 
 // ── State ─────────────────────────────────────────────────────────────────────
 
+const _urlToken = new URLSearchParams(window.location.search).get('hubToken');
+if (_urlToken) localStorage.setItem('tkn_games', _urlToken);
+
 let token           = localStorage.getItem('tkn_games') || null;
 let currentUser     = null;
 let games           = [];
