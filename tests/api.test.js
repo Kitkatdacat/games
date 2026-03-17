@@ -349,9 +349,9 @@ describe('Genres', () => {
   });
 
   it('POST /api/genres creates a genre (admin)', async () => {
-    const res = await authPost('/api/genres', { name: 'Action' });
+    const res = await authPost('/api/genres', { name: 'TestGenre' });
     expect(res.status).toBe(201);
-    expect(res.body.name).toBe('Action');
+    expect(res.body.name).toBe('TestGenre');
     genreId = res.body.id;
   });
 
@@ -384,9 +384,9 @@ describe('Platforms', () => {
   });
 
   it('POST /api/platforms creates a platform (admin)', async () => {
-    const res = await authPost('/api/platforms', { name: 'PC' });
+    const res = await authPost('/api/platforms', { name: 'TestPlatform' });
     expect(res.status).toBe(201);
-    expect(res.body.name).toBe('PC');
+    expect(res.body.name).toBe('TestPlatform');
     platformId = res.body.id;
   });
 
