@@ -931,7 +931,7 @@ function setupEvents() {
   // Help
   $id('dd-help').addEventListener('click', () => {
     $id('user-dropdown').classList.add('hidden');
-    window.open(`${getHubUrl()}/help-games.html`, '_blank');
+    window.open(`${getHubUrl()}/help/games/`, '_blank');
   });
 
   // Leave to Hub / Admin
