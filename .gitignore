@@ -1,1 +1,4 @@
-node_modules/\ngames.db\n*.db-shm\n*.db-wal
+node_modules/
+games.db
+*.db-shm
+*.db-wal
