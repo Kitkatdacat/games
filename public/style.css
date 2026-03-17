@@ -589,3 +589,72 @@ html, body {
   color: var(--text-3); font-size: 14px;
 }
 .empty-state p { margin-top: 8px; font-size: 13px; }
+
+/* ── Emulators ───────────────────────────────────────────────────────────── */
+.emu-systems-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 20px; padding: 24px 48px 48px;
+}
+.emu-system-card {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius); overflow: hidden;
+  cursor: pointer; text-align: center; padding: 0 0 20px;
+  display: flex; flex-direction: column; align-items: center;
+  transition: transform 200ms ease, box-shadow 200ms ease, border-color var(--trans);
+}
+.emu-system-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 8px 24px rgba(0,0,0,.5);
+  border-color: var(--accent-border);
+}
+.emu-system-icon {
+  width: 100%; height: 120px;
+  display: flex; align-items: center; justify-content: center;
+  margin-bottom: 14px;
+}
+.emu-system-name { font-size: 14px; font-weight: 700; margin-bottom: 4px; }
+.emu-system-count { font-size: 11px; color: var(--text-3); }
+
+.emu-list-header {
+  display: flex; align-items: center; gap: 12px;
+  padding: 24px 48px 16px;
+}
+.emu-list-title { font-size: 20px; font-weight: 700; flex: 1; }
+
+#emu-rom-list { padding: 0 48px 48px; }
+.emu-rom-item {
+  display: flex; align-items: center; gap: 14px;
+  padding: 12px 16px; background: var(--surface);
+  border: 1px solid var(--border); border-radius: var(--radius-sm);
+  margin-bottom: 8px; transition: border-color var(--trans);
+}
+.emu-rom-item:hover { border-color: var(--accent-border); }
+.emu-rom-icon { color: var(--text-3); flex-shrink: 0; }
+.emu-rom-info { flex: 1; min-width: 0; }
+.emu-rom-name { font-size: 14px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.emu-rom-meta { font-size: 11px; color: var(--text-3); margin-top: 2px; }
+.emu-rom-actions { flex-shrink: 0; display: flex; align-items: center; }
+
+/* Emulator Player Overlay */
+#emulator-overlay {
+  position: fixed; inset: 0; background: #000;
+  z-index: 9000; display: flex; flex-direction: column;
+}
+#emulator-overlay.hidden { display: none; }
+#emulator-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 10px 16px; background: #111; flex-shrink: 0;
+}
+#emulator-title { font-size: 14px; font-weight: 600; color: #fff; }
+#emulator-close {
+  background: rgba(255,255,255,.1); border: none; color: #fff;
+  width: 32px; height: 32px; border-radius: 50%; font-size: 16px;
+  cursor: pointer; display: flex; align-items: center; justify-content: center;
+  transition: background 150ms ease;
+}
+#emulator-close:hover { background: rgba(255,255,255,.25); }
+#emulator-frame {
+  flex: 1; border: none; width: 100%; height: 100%;
+  background: #000;
+}

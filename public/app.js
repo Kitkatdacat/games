@@ -222,10 +222,11 @@ function switchView(name) {
   document.querySelectorAll('.nav-item').forEach(n => {
     n.classList.toggle('nav-item--active', n.dataset.view === name);
   });
-  if (name === 'home')    renderHome();
-  if (name === 'library') renderLibrary();
-  if (name === 'search')  renderSearch();
-  if (name === 'admin')   renderAdmin();
+  if (name === 'home')      renderHome();
+  if (name === 'library')   renderLibrary();
+  if (name === 'search')    renderSearch();
+  if (name === 'admin')     renderAdmin();
+  if (name === 'emulators') { activeEmuSystem = null; renderEmulators(); }
 }
 
 // ── Hero Banner ───────────────────────────────────────────────────────────────
@@ -975,8 +976,163 @@ function setupEvents() {
     if (e.target === $id('game-detail-modal')) closeDetailModal();
   });
   document.addEventListener('keydown', e => {
-    if (e.key === 'Escape') closeDetailModal();
+    if (e.key === 'Escape') { closeDetailModal(); closeEmulator(); }
   });
+
+  // Emulator close
+  $id('emulator-close').addEventListener('click', closeEmulator);
+}
+
+// ── Emulators ─────────────────────────────────────────────────────────────────
+
+const EMULATOR_SYSTEMS = [
+  { id: 'nes',    name: 'NES',            color: '#E8283C' },
+  { id: 'snes',   name: 'Super Nintendo', color: '#5B4F9E' },
+  { id: 'n64',    name: 'Nintendo 64',    color: '#E8823A' },
+  { id: 'gba',    name: 'Game Boy / GBA', color: '#4CAF82' },
+  { id: 'psx',    name: 'PlayStation',    color: '#00439C' },
+  { id: 'segaMD', name: 'Sega Genesis',   color: '#1A1A2E' },
+  { id: 'nds',    name: 'Nintendo DS',    color: '#D4A017' },
+];
+
+let activeEmuSystem = null;
+
+function formatFileSize(bytes) {
+  if (!bytes) return '0 B';
+  if (bytes < 1024) return bytes + ' B';
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+  return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+}
+
+async function renderEmulators() {
+  const content = $id('emulators-content');
+
+  if (!activeEmuSystem) {
+    // System selection grid
+    content.innerHTML = `<div class="emu-systems-grid">${
+      EMULATOR_SYSTEMS.map(s => `
+        <button class="emu-system-card" data-system="${s.id}">
+          <div class="emu-system-icon" style="background:${s.color}">
+            <svg viewBox="0 0 24 24" fill="none" width="36" height="36">
+              <rect x="2" y="6" width="20" height="14" rx="3" stroke="white" stroke-width="1.5"/>
+              <path d="M8 13h2m-1-1v2M15 13h.01M17 13h.01" stroke="white" stroke-width="2" stroke-linecap="round"/>
+            </svg>
+          </div>
+          <div class="emu-system-name">${esc(s.name)}</div>
+          <div class="emu-system-count" id="emu-count-${s.id}">—</div>
+        </button>`
+      ).join('')
+    }</div>`;
+
+    content.querySelectorAll('.emu-system-card').forEach(card => {
+      card.addEventListener('click', () => { activeEmuSystem = card.dataset.system; renderEmulators(); });
+    });
+
+    // Load ROM counts in background
+    api('GET', '/api/roms').then(allRoms => {
+      EMULATOR_SYSTEMS.forEach(s => {
+        const el = $id(`emu-count-${s.id}`);
+        if (el) {
+          const n = allRoms.filter(r => r.system === s.id).length;
+          el.textContent = n + ' ROM' + (n !== 1 ? 's' : '');
+        }
+      });
+    }).catch(() => {});
+
+  } else {
+    // ROM list for selected system
+    const sys = EMULATOR_SYSTEMS.find(s => s.id === activeEmuSystem);
+    let emuRoms = [];
+    try { emuRoms = await api('GET', `/api/roms?system=${encodeURIComponent(activeEmuSystem)}`); } catch {}
+    const isAdmin = currentUser?.role === 'admin';
+
+    content.innerHTML = `
+      <div class="emu-list-header">
+        <button class="btn btn-ghost btn-sm" id="emu-back">← Back</button>
+        <h3 class="emu-list-title">${esc(sys?.name || activeEmuSystem)}</h3>
+        ${isAdmin ? `
+          <label class="btn btn-accent btn-sm" for="emu-upload-input" style="cursor:pointer">Upload ROM</label>
+          <input type="file" id="emu-upload-input" accept=".nes,.sfc,.smc,.z64,.n64,.v64,.gb,.gbc,.gba,.bin,.iso,.md,.smd,.gen,.nds" style="display:none">
+        ` : '<div></div>'}
+      </div>
+      <div id="emu-rom-list">${
+        !emuRoms.length
+          ? `<div class="empty-state"><strong>No ROMs yet.</strong>${isAdmin ? '<p>Upload a ROM file to get started.</p>' : ''}</div>`
+          : emuRoms.map(rom => `
+              <div class="emu-rom-item">
+                <div class="emu-rom-icon">
+                  <svg viewBox="0 0 20 20" fill="none" width="18" height="18"><rect x="3" y="4" width="14" height="12" rx="2" stroke="currentColor" stroke-width="1.5"/><path d="M7 8h6M7 11h4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+                </div>
+                <div class="emu-rom-info">
+                  <div class="emu-rom-name">${esc(rom.name)}</div>
+                  <div class="emu-rom-meta">${formatFileSize(rom.size)}</div>
+                </div>
+                <div class="emu-rom-actions">
+                  <button class="btn btn-accent btn-sm emu-play-btn" data-id="${esc(rom.id)}" data-name="${esc(rom.name)}">▶ Play</button>
+                  ${isAdmin ? `<button class="btn btn-danger btn-sm emu-del-btn" data-id="${esc(rom.id)}" style="margin-left:6px">Del</button>` : ''}
+                </div>
+              </div>`
+          ).join('')
+      }</div>`;
+
+    $id('emu-back').addEventListener('click', () => { activeEmuSystem = null; renderEmulators(); });
+
+    if (isAdmin && $id('emu-upload-input')) {
+      $id('emu-upload-input').addEventListener('change', uploadRom);
+    }
+
+    content.querySelectorAll('.emu-play-btn').forEach(btn => {
+      btn.addEventListener('click', () => launchEmulator(btn.dataset.id, btn.dataset.name));
+    });
+
+    if (isAdmin) {
+      content.querySelectorAll('.emu-del-btn').forEach(btn => {
+        btn.addEventListener('click', async () => {
+          if (!confirm('Delete this ROM? This cannot be undone.')) return;
+          try {
+            await api('DELETE', `/api/roms/${btn.dataset.id}`);
+            toast('ROM deleted');
+            renderEmulators();
+          } catch (err) { toast(err.message, 'error'); }
+        });
+      });
+    }
+  }
+}
+
+async function uploadRom() {
+  const file = $id('emu-upload-input').files[0];
+  if (!file) return;
+  const formData = new FormData();
+  formData.append('rom', file);
+  formData.append('system', activeEmuSystem);
+  formData.append('name', file.name.replace(/\.[^.]+$/, ''));
+  try {
+    const res = await fetch('/api/roms', {
+      method: 'POST',
+      headers: { 'x-hub-session': token || '' },
+      body: formData,
+    });
+    if (!res.ok) { const d = await res.json().catch(() => ({})); throw new Error(d.error || 'Upload failed'); }
+    toast('ROM uploaded', 'success');
+    renderEmulators();
+  } catch (err) { toast(err.message, 'error'); }
+}
+
+function launchEmulator(romId, romName) {
+  const url = `/emulator.html?core=${encodeURIComponent(activeEmuSystem)}&rom=${encodeURIComponent(`/api/roms/${romId}/file`)}`;
+  $id('emulator-title').textContent = romName || 'Emulator';
+  $id('emulator-frame').src = url;
+  $id('emulator-overlay').classList.remove('hidden');
+  document.body.style.overflow = 'hidden';
+}
+
+function closeEmulator() {
+  const overlay = $id('emulator-overlay');
+  if (!overlay || overlay.classList.contains('hidden')) return;
+  overlay.classList.add('hidden');
+  $id('emulator-frame').src = '';
+  document.body.style.overflow = '';
 }
 
 // ── Boot ──────────────────────────────────────────────────────────────────────

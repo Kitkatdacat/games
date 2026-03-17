@@ -65,10 +65,20 @@ db.exec(`
     name TEXT NOT NULL UNIQUE
   );
 
+  CREATE TABLE IF NOT EXISTS roms (
+    id         TEXT PRIMARY KEY,
+    system     TEXT NOT NULL,
+    name       TEXT NOT NULL,
+    filename   TEXT NOT NULL,
+    size       INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL
+  );
+
   CREATE INDEX IF NOT EXISTS idx_ul_user   ON user_library(user_id);
   CREATE INDEX IF NOT EXISTS idx_ul_game   ON user_library(game_id);
   CREATE INDEX IF NOT EXISTS idx_ul_status ON user_library(user_id, status);
   CREATE INDEX IF NOT EXISTS idx_ps_user   ON playtime_sessions(user_id, game_id);
+  CREATE INDEX IF NOT EXISTS idx_roms_sys  ON roms(system);
 `);
 
 // Seed default genres and platforms if empty
@@ -301,6 +311,31 @@ function createPlatform(name) {
 }
 function deletePlatform(id) { db.prepare('DELETE FROM platforms WHERE id = ?').run(id); }
 
+// ── ROMs ──────────────────────────────────────────────────────────────────────
+
+function listRoms(system = '') {
+  let sql = 'SELECT * FROM roms';
+  const params = [];
+  if (system) { sql += ' WHERE system = ?'; params.push(system); }
+  sql += ' ORDER BY name ASC';
+  return db.prepare(sql).all(...params);
+}
+
+function getRomById(id) {
+  return db.prepare('SELECT * FROM roms WHERE id = ?').get(id) || null;
+}
+
+function createRom({ system, name, filename, size }) {
+  const id  = crypto.randomUUID();
+  const now = new Date().toISOString();
+  db.prepare('INSERT INTO roms (id, system, name, filename, size, created_at) VALUES (?,?,?,?,?,?)').run(id, system, name, filename, size, now);
+  return getRomById(id);
+}
+
+function deleteRom(id) {
+  db.prepare('DELETE FROM roms WHERE id = ?').run(id);
+}
+
 module.exports = {
   listGames, getGameById, createGame, updateGame, deleteGame,
   getLibraryEntry, listLibrary, upsertLibraryEntry, removeLibraryEntry, getLibraryStats,
@@ -308,4 +343,5 @@ module.exports = {
   deleteSession, getPlaytime, getOpenSession,
   listGenres, createGenre, deleteGenre,
   listPlatforms, createPlatform, deletePlatform,
+  listRoms, getRomById, createRom, deleteRom,
 };

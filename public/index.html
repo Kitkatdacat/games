@@ -101,6 +101,10 @@
           <svg class="nav-icon" viewBox="0 0 20 20" fill="none"><circle cx="8.5" cy="8.5" r="5.5" stroke="currentColor" stroke-width="1.5"/><path d="M15 15l-3-3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
           <span class="nav-label">Browse</span>
         </button>
+        <button class="nav-item" data-view="emulators" id="nav-emulators">
+          <svg class="nav-icon" viewBox="0 0 20 20" fill="none"><rect x="2" y="5" width="16" height="11" rx="2.5" stroke="currentColor" stroke-width="1.5"/><path d="M7 10.5h2m-1-1v2M13 10.5h.01M15 10.5h.01" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+          <span class="nav-label">Emulators</span>
+        </button>
         <button class="nav-item hidden" data-view="admin" id="nav-admin">
           <svg class="nav-icon" viewBox="0 0 20 20" fill="none"><circle cx="10" cy="10" r="2" stroke="currentColor" stroke-width="1.5"/><path d="M10 2v2M10 16v2M2 10h2M16 10h2M4.22 4.22l1.42 1.42M14.36 14.36l1.42 1.42M4.22 15.78l1.42-1.42M14.36 5.64l1.42-1.42" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
           <span class="nav-label">Admin</span>
@@ -159,6 +163,14 @@
             <div id="platform-filter-strip" class="filter-strip"></div>
           </div>
           <div id="search-results-grid" class="game-grid"></div>
+        </div>
+
+        <!-- Emulators View -->
+        <div class="view" data-view="emulators" id="view-emulators">
+          <div class="view-header">
+            <h2 class="view-title">Emulators</h2>
+          </div>
+          <div id="emulators-content"></div>
         </div>
 
         <!-- Admin View -->
@@ -273,6 +285,15 @@
         </div>
       </div>
     </div>
+  </div>
+
+  <!-- ── Emulator Player Overlay ── -->
+  <div id="emulator-overlay" class="hidden">
+    <div id="emulator-header">
+      <span id="emulator-title"></span>
+      <button id="emulator-close">&#x2715;</button>
+    </div>
+    <iframe id="emulator-frame" src="" allowfullscreen></iframe>
   </div>
 
   <!-- ── Toast container ── -->

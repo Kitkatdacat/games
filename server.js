@@ -2,7 +2,10 @@
 
 const express  = require('express');
 const path     = require('path');
+const fs       = require('fs');
+const crypto   = require('crypto');
 const bcrypt   = require('bcryptjs');
+const multer   = require('multer');
 const {
   requireAuth, requireAdmin,
   safeUser, getUserCount, getUserById, getUserByUsername,
@@ -15,7 +18,19 @@ const {
   deleteSession: deletePlaytimeSession, getPlaytime, getOpenSession,
   listGenres, createGenre, deleteGenre,
   listPlatforms, createPlatform, deletePlatform,
+  listRoms, getRomById, createRom, deleteRom,
 } = require('./db');
+
+const romsDir = path.join(__dirname, 'roms');
+if (!fs.existsSync(romsDir)) fs.mkdirSync(romsDir);
+
+const romUpload = multer({
+  storage: multer.diskStorage({
+    destination: romsDir,
+    filename: (req, file, cb) => cb(null, `${crypto.randomUUID()}-${file.originalname}`),
+  }),
+  limits: { fileSize: 512 * 1024 * 1024 }, // 512 MB
+});
 
 const app = express();
 app.use(express.json());
@@ -208,6 +223,41 @@ app.post('/api/platforms', requireAuth, requireAdmin, (req, res) => {
 
 app.delete('/api/platforms/:id', requireAuth, requireAdmin, (req, res) => {
   deletePlatform(req.params.id); res.json({ ok: true });
+});
+
+// ── ROMs ──────────────────────────────────────────────────────────────────────
+
+app.get('/api/roms', requireAuth, (req, res) => {
+  res.json(listRoms(req.query.system || ''));
+});
+
+app.post('/api/roms', requireAuth, requireAdmin, romUpload.single('rom'), (req, res) => {
+  const { system, name } = req.body;
+  if (!system || !name || !req.file)
+    return res.status(400).json({ error: 'system, name, and rom file are required' });
+  try {
+    const rom = createRom({ system, name, filename: req.file.filename, size: req.file.size });
+    res.status(201).json(rom);
+  } catch (err) {
+    fs.unlink(path.join(romsDir, req.file.filename), () => {});
+    res.status(400).json({ error: err.message });
+  }
+});
+
+app.get('/api/roms/:id/file', requireAuth, (req, res) => {
+  const rom = getRomById(req.params.id);
+  if (!rom) return res.status(404).json({ error: 'ROM not found' });
+  const filePath = path.join(romsDir, rom.filename);
+  if (!fs.existsSync(filePath)) return res.status(404).json({ error: 'ROM file missing' });
+  res.download(filePath, rom.name + path.extname(rom.filename));
+});
+
+app.delete('/api/roms/:id', requireAuth, requireAdmin, (req, res) => {
+  const rom = getRomById(req.params.id);
+  if (!rom) return res.status(404).json({ error: 'ROM not found' });
+  fs.unlink(path.join(romsDir, rom.filename), () => {});
+  deleteRom(req.params.id);
+  res.json({ ok: true });
 });
 
 // ── Start ─────────────────────────────────────────────────────────────────────
