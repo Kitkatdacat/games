@@ -1010,7 +1010,7 @@ function setupEvents() {
 // ── Emulators ─────────────────────────────────────────────────────────────────
 
 const EMULATOR_SYSTEMS = [
-  { id: 'nes',    name: 'NES',            color: '#E8283C' },
+  { id: 'nes',    name: 'NES',            color: '#E8E8E8', logo: 'img/systems/nes.svg' },
   { id: 'snes',   name: 'Super Nintendo', color: '#5B4F9E' },
   { id: 'n64',    name: 'Nintendo 64',    color: '#E8823A' },
   { id: 'gba',    name: 'Game Boy / GBA', color: '#4CAF82' },
@@ -1037,10 +1037,13 @@ async function renderEmulators() {
       EMULATOR_SYSTEMS.map(s => `
         <button class="emu-system-card" data-system="${s.id}">
           <div class="emu-system-icon" style="background:${s.color}">
-            <svg viewBox="0 0 24 24" fill="none" width="36" height="36">
-              <rect x="2" y="6" width="20" height="14" rx="3" stroke="white" stroke-width="1.5"/>
-              <path d="M8 13h2m-1-1v2M15 13h.01M17 13h.01" stroke="white" stroke-width="2" stroke-linecap="round"/>
-            </svg>
+            ${s.logo
+              ? `<img src="${esc(s.logo)}" alt="${esc(s.name)}" style="width:80%;height:80%;object-fit:contain;">`
+              : `<svg viewBox="0 0 24 24" fill="none" width="36" height="36">
+                  <rect x="2" y="6" width="20" height="14" rx="3" stroke="white" stroke-width="1.5"/>
+                  <path d="M8 13h2m-1-1v2M15 13h.01M17 13h.01" stroke="white" stroke-width="2" stroke-linecap="round"/>
+                </svg>`
+            }
           </div>
           <div class="emu-system-name">${esc(s.name)}</div>
           <div class="emu-system-count" id="emu-count-${s.id}">—</div>

@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120">
+  <rect width="120" height="120" rx="26" fill="#E8E8E8"/>
+  <text
+    x="60" y="76"
+    font-family="Arial Black, Arial, sans-serif"
+    font-size="52"
+    font-weight="900"
+    font-style="italic"
+    fill="#CC0000"
+    text-anchor="middle"
+    letter-spacing="-2"
+  >nes</text>
+</svg>
