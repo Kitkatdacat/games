@@ -658,3 +658,62 @@ html, body {
   flex: 1; border: none; width: 100%; height: 100%;
   background: #000;
 }
+
+/* ── Hosted Servers ── */
+.hosted-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 16px;
+  padding: 24px;
+}
+.hosted-card {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 20px 18px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  transition: border-color 200ms;
+}
+.hosted-card--online { border-color: var(--accent); }
+.hosted-card-status  { margin-bottom: 4px; }
+.hosted-badge {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  padding: 2px 8px;
+  border-radius: 20px;
+}
+.hosted-badge--online  { background: rgba(232,130,58,.15); color: var(--accent); border: 1px solid var(--accent); }
+.hosted-badge--offline { background: rgba(128,128,128,.1); color: var(--text-3); border: 1px solid var(--border); }
+.hosted-card-name { font-weight: 600; font-size: 15px; color: var(--text-1); }
+.hosted-card-desc { font-size: 12px; color: var(--text-3); }
+.hosted-card-meta { font-size: 11px; color: var(--text-3); font-family: monospace; margin-top: 2px; }
+.hosted-toggle {
+  display: inline-flex;
+  align-items: center;
+  cursor: pointer;
+  margin-top: 10px;
+  user-select: none;
+}
+.hosted-toggle-input { display: none; }
+.hosted-toggle-track {
+  width: 42px; height: 24px;
+  background: var(--border);
+  border-radius: 12px;
+  position: relative;
+  transition: background 200ms;
+}
+.hosted-toggle-input:checked ~ .hosted-toggle-track { background: var(--accent); }
+.hosted-toggle-thumb {
+  position: absolute;
+  top: 3px; left: 3px;
+  width: 18px; height: 18px;
+  border-radius: 50%;
+  background: #fff;
+  transition: transform 200ms;
+}
+.hosted-toggle-input:checked ~ .hosted-toggle-track .hosted-toggle-thumb { transform: translateX(18px); }
+.hosted-toggle-input:disabled ~ .hosted-toggle-track { opacity: 0.5; }

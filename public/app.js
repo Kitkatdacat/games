@@ -31,6 +31,8 @@ let heroIndex       = 0;
 let heroTimer       = null;
 let currentRating   = 0;
 let editingGameId   = null;   // null = creating new
+let hostedServers   = [];
+let hostedPollTimer = null;
 
 // ── API Helper ────────────────────────────────────────────────────────────────
 
@@ -226,6 +228,8 @@ function switchView(name) {
   if (name === 'library')   renderLibrary();
   if (name === 'search')    renderSearch();
   if (name === 'admin')     renderAdmin();
+  if (name === 'hosted')    { renderHosted(); startHostedPoll(); }
+  if (name !== 'hosted')    stopHostedPoll();
   if (name === 'emulators') { activeEmuSystem = null; renderEmulators(); }
 }
 
@@ -705,10 +709,11 @@ function switchAdminTab(name) {
   document.querySelectorAll('.admin-tab-panel').forEach(p =>
     p.classList.toggle('hidden', p.id !== `admin-tab-${name}`)
   );
-  if (name === 'catalog')   renderAdminCatalog();
-  if (name === 'add-game')  renderGameForm(null);
-  if (name === 'genres')    renderGenresAdmin();
-  if (name === 'platforms') renderPlatformsAdmin();
+  if (name === 'catalog')        renderAdminCatalog();
+  if (name === 'add-game')       renderGameForm(null);
+  if (name === 'genres')         renderGenresAdmin();
+  if (name === 'platforms')      renderPlatformsAdmin();
+  if (name === 'hosted-servers') renderAdminHosted();
 }
 
 function renderAdminCatalog() {
@@ -946,6 +951,23 @@ function setupEvents() {
     switchView('admin');
   });
 
+  $id('hosted-add-btn').addEventListener('click', async () => {
+    const name  = $id('hosted-name-input').value.trim();
+    const host  = $id('hosted-host-input').value.trim();
+    const port  = parseInt($id('hosted-port-input').value) || 25565;
+    const start = $id('hosted-start-input').value.trim();
+    const stop  = $id('hosted-stop-input').value.trim();
+    const desc  = $id('hosted-desc-input').value.trim();
+    if (!name || !host) { toast('Name and host are required', 'error'); return; }
+    try {
+      await api('POST', '/api/hosted', { name, host, port, start_command: start, stop_command: stop, description: desc });
+      ['hosted-name-input','hosted-host-input','hosted-start-input','hosted-stop-input','hosted-desc-input'].forEach(id => { $id(id).value = ''; });
+      $id('hosted-port-input').value = '25565';
+      toast('Server added');
+      renderAdminHosted();
+    } catch (err) { toast(err.message, 'error'); }
+  });
+
   // Library filter tabs
   $id('library-filter-tabs').addEventListener('click', e => {
     const tab = e.target.closest('.lib-tab');
@@ -1133,6 +1155,98 @@ function closeEmulator() {
   overlay.classList.add('hidden');
   $id('emulator-frame').src = '';
   document.body.style.overflow = '';
+}
+
+// ── Hosted Servers ────────────────────────────────────────────────────────────
+
+function startHostedPoll() {
+  stopHostedPoll();
+  hostedPollTimer = setInterval(() => {
+    if (activeView !== 'hosted') { stopHostedPoll(); return; }
+    renderHosted();
+  }, 15000);
+}
+
+function stopHostedPoll() {
+  clearInterval(hostedPollTimer);
+  hostedPollTimer = null;
+}
+
+async function renderHosted() {
+  const grid = $id('hosted-grid');
+  if (!grid) return;
+  try { hostedServers = await api('GET', '/api/hosted'); }
+  catch { grid.innerHTML = '<div class="empty-state">Could not load servers.</div>'; return; }
+
+  if (!hostedServers.length) {
+    grid.innerHTML = '<div class="empty-state"><strong>No servers configured.</strong><p>Add a server in the Admin → Hosted Servers tab.</p></div>';
+    return;
+  }
+
+  const isAdmin = currentUser && currentUser.role === 'admin';
+  grid.innerHTML = hostedServers.map(s => `
+    <div class="hosted-card${s.online ? ' hosted-card--online' : ''}" data-id="${esc(s.id)}">
+      <div class="hosted-card-status">${s.online
+        ? '<span class="hosted-badge hosted-badge--online">ONLINE</span>'
+        : '<span class="hosted-badge hosted-badge--offline">OFFLINE</span>'}</div>
+      <div class="hosted-card-name">${esc(s.name)}</div>
+      ${s.description ? `<div class="hosted-card-desc">${esc(s.description)}</div>` : ''}
+      <div class="hosted-card-meta">${esc(s.host)}:${s.port}</div>
+      ${isAdmin ? `
+      <label class="hosted-toggle" title="${s.online ? 'Stop server' : 'Start server'}">
+        <input type="checkbox" class="hosted-toggle-input" data-id="${esc(s.id)}" ${s.online ? 'checked' : ''}>
+        <span class="hosted-toggle-track"><span class="hosted-toggle-thumb"></span></span>
+      </label>` : ''}
+    </div>
+  `).join('');
+
+  if (isAdmin) {
+    grid.querySelectorAll('.hosted-toggle-input').forEach(cb => {
+      cb.addEventListener('change', async () => {
+        const id = cb.dataset.id;
+        const turnOn = cb.checked;
+        cb.disabled = true;
+        try {
+          await api('POST', `/api/hosted/${id}/${turnOn ? 'start' : 'stop'}`);
+          toast(turnOn ? 'Start command sent' : 'Stop command sent');
+          setTimeout(() => renderHosted(), 3000);
+        } catch (err) {
+          toast(err.message, 'error');
+          cb.checked = !turnOn;
+        } finally { cb.disabled = false; }
+      });
+    });
+  }
+}
+
+async function renderAdminHosted() {
+  const list = $id('admin-hosted-list');
+  if (!list) return;
+  const servers = await api('GET', '/api/hosted').catch(() => []);
+  if (!servers.length) {
+    list.innerHTML = '<div class="empty-state">No servers yet.</div>';
+    return;
+  }
+  list.innerHTML = `<div class="admin-lookup-list">${servers.map(s => `
+    <div class="admin-lookup-item" style="flex-direction:column;align-items:flex-start;gap:2px">
+      <div style="display:flex;align-items:center;gap:8px;width:100%">
+        <strong>${esc(s.name)}</strong>
+        <span style="color:var(--text-3);font-size:11px">${esc(s.host)}:${s.port}</span>
+        <span style="margin-left:auto;color:${s.online ? 'var(--accent)' : 'var(--text-3)'};">${s.online ? '● Online' : '○ Offline'}</span>
+        <button class="admin-lookup-delete" data-id="${esc(s.id)}" title="Delete">×</button>
+      </div>
+      ${s.description ? `<div style="font-size:11px;color:var(--text-3)">${esc(s.description)}</div>` : ''}
+      <div style="font-size:11px;color:var(--text-3)">Start: <code>${esc(s.start_command || '—')}</code> &nbsp; Stop: <code>${esc(s.stop_command || '—')}</code></div>
+    </div>
+  `).join('')}</div>`;
+  list.querySelectorAll('.admin-lookup-delete').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const s = servers.find(x => x.id === btn.dataset.id);
+      if (!confirm(`Delete "${s?.name}"?`)) return;
+      await api('DELETE', `/api/hosted/${btn.dataset.id}`);
+      renderAdminHosted();
+    });
+  });
 }
 
 // ── Boot ──────────────────────────────────────────────────────────────────────

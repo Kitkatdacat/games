@@ -74,6 +74,17 @@ db.exec(`
     created_at TEXT NOT NULL
   );
 
+  CREATE TABLE IF NOT EXISTS hosted_servers (
+    id            TEXT PRIMARY KEY,
+    name          TEXT NOT NULL,
+    description   TEXT NOT NULL DEFAULT '',
+    host          TEXT NOT NULL DEFAULT '127.0.0.1',
+    port          INTEGER NOT NULL DEFAULT 25565,
+    start_command TEXT NOT NULL DEFAULT '',
+    stop_command  TEXT NOT NULL DEFAULT '',
+    created_at    TEXT NOT NULL
+  );
+
   CREATE INDEX IF NOT EXISTS idx_ul_user   ON user_library(user_id);
   CREATE INDEX IF NOT EXISTS idx_ul_game   ON user_library(game_id);
   CREATE INDEX IF NOT EXISTS idx_ul_status ON user_library(user_id, status);
@@ -336,6 +347,44 @@ function deleteRom(id) {
   db.prepare('DELETE FROM roms WHERE id = ?').run(id);
 }
 
+// ── Hosted Servers ────────────────────────────────────────────────────────────
+
+function listHostedServers() {
+  return db.prepare('SELECT * FROM hosted_servers ORDER BY name').all();
+}
+
+function getHostedServerById(id) {
+  return db.prepare('SELECT * FROM hosted_servers WHERE id = ?').get(id) || null;
+}
+
+function createHostedServer(data) {
+  const id  = crypto.randomUUID();
+  const now = new Date().toISOString();
+  db.prepare(`
+    INSERT INTO hosted_servers (id, name, description, host, port, start_command, stop_command, created_at)
+    VALUES (?,?,?,?,?,?,?,?)
+  `).run(id, data.name, data.description || '', data.host || '127.0.0.1',
+    data.port || 25565, data.start_command || '', data.stop_command || '', now);
+  return getHostedServerById(id);
+}
+
+function updateHostedServer(id, data) {
+  const existing = getHostedServerById(id);
+  if (!existing) return null;
+  const fields = [], params = [];
+  for (const k of ['name','description','host','port','start_command','stop_command']) {
+    if (data[k] !== undefined) { fields.push(`${k} = ?`); params.push(data[k]); }
+  }
+  if (!fields.length) return existing;
+  params.push(id);
+  db.prepare(`UPDATE hosted_servers SET ${fields.join(', ')} WHERE id = ?`).run(...params);
+  return getHostedServerById(id);
+}
+
+function deleteHostedServer(id) {
+  db.prepare('DELETE FROM hosted_servers WHERE id = ?').run(id);
+}
+
 module.exports = {
   listGames, getGameById, createGame, updateGame, deleteGame,
   getLibraryEntry, listLibrary, upsertLibraryEntry, removeLibraryEntry, getLibraryStats,
@@ -344,4 +393,5 @@ module.exports = {
   listGenres, createGenre, deleteGenre,
   listPlatforms, createPlatform, deletePlatform,
   listRoms, getRomById, createRom, deleteRom,
+  listHostedServers, getHostedServerById, createHostedServer, updateHostedServer, deleteHostedServer,
 };

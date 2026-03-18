@@ -105,6 +105,10 @@
           <svg class="nav-icon" viewBox="0 0 20 20" fill="none"><rect x="2" y="5" width="16" height="11" rx="2.5" stroke="currentColor" stroke-width="1.5"/><path d="M7 10.5h2m-1-1v2M13 10.5h.01M15 10.5h.01" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
           <span class="nav-label">Emulators</span>
         </button>
+        <button class="nav-item" data-view="hosted" id="nav-hosted">
+          <svg class="nav-icon" viewBox="0 0 20 20" fill="none"><rect x="2" y="3" width="16" height="12" rx="2" stroke="currentColor" stroke-width="1.5"/><path d="M6 7h2M6 10h2M10 7h4M10 10h4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><path d="M7 15v2M13 15v2M5 17h10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+          <span class="nav-label">Hosted</span>
+        </button>
         <button class="nav-item hidden" data-view="admin" id="nav-admin">
           <svg class="nav-icon" viewBox="0 0 20 20" fill="none"><circle cx="10" cy="10" r="2" stroke="currentColor" stroke-width="1.5"/><path d="M10 2v2M10 16v2M2 10h2M16 10h2M4.22 4.22l1.42 1.42M14.36 14.36l1.42 1.42M4.22 15.78l1.42-1.42M14.36 5.64l1.42-1.42" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
           <span class="nav-label">Admin</span>
@@ -173,6 +177,14 @@
           <div id="emulators-content"></div>
         </div>
 
+        <!-- Hosted Servers View -->
+        <div class="view" data-view="hosted" id="view-hosted">
+          <div class="view-header">
+            <h2 class="view-title">Hosted Servers</h2>
+          </div>
+          <div id="hosted-grid" class="hosted-grid"></div>
+        </div>
+
         <!-- Admin View -->
         <div class="view" data-view="admin" id="view-admin">
           <div class="view-header">
@@ -183,6 +195,7 @@
             <button class="admin-tab" data-atab="add-game">Add Game</button>
             <button class="admin-tab" data-atab="genres">Genres</button>
             <button class="admin-tab" data-atab="platforms">Platforms</button>
+            <button class="admin-tab" data-atab="hosted-servers">Hosted Servers</button>
           </div>
           <div id="admin-tab-catalog" class="admin-tab-panel">
             <div id="admin-game-table-wrap"></div>
@@ -202,6 +215,18 @@
             <div class="admin-add-row">
               <input type="text" id="platform-input" placeholder="Platform name…" />
               <button class="btn btn-accent" id="platform-add-btn">Add</button>
+            </div>
+          </div>
+          <div id="admin-tab-hosted-servers" class="admin-tab-panel hidden">
+            <div id="admin-hosted-list"></div>
+            <div class="admin-add-row">
+              <input type="text" id="hosted-name-input" placeholder="Server name…" />
+              <input type="text" id="hosted-host-input" placeholder="Host / IP…" style="width:130px" />
+              <input type="number" id="hosted-port-input" placeholder="Port" style="width:70px" value="25565" />
+              <input type="text" id="hosted-start-input" placeholder="Start command…" style="width:170px" />
+              <input type="text" id="hosted-stop-input" placeholder="Stop command…" style="width:170px" />
+              <input type="text" id="hosted-desc-input" placeholder="Description (optional)…" style="width:170px" />
+              <button class="btn btn-accent" id="hosted-add-btn">Add</button>
             </div>
           </div>
         </div>

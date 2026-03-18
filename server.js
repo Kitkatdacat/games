@@ -6,6 +6,8 @@ const fs       = require('fs');
 const crypto   = require('crypto');
 const bcrypt   = require('bcryptjs');
 const multer   = require('multer');
+const net      = require('net');
+const { exec } = require('child_process');
 const {
   requireAuth, requireAdmin,
   safeUser, getUserCount, getUserById, getUserByUsername,
@@ -19,6 +21,7 @@ const {
   listGenres, createGenre, deleteGenre,
   listPlatforms, createPlatform, deletePlatform,
   listRoms, getRomById, createRom, deleteRom,
+  listHostedServers, getHostedServerById, createHostedServer, updateHostedServer, deleteHostedServer,
 } = require('./db');
 
 const romsDir = path.join(__dirname, 'roms');
@@ -257,6 +260,60 @@ app.delete('/api/roms/:id', requireAuth, requireAdmin, (req, res) => {
   if (!rom) return res.status(404).json({ error: 'ROM not found' });
   fs.unlink(path.join(romsDir, rom.filename), () => {});
   deleteRom(req.params.id);
+  res.json({ ok: true });
+});
+
+// ── Hosted Servers ─────────────────────────────────────────────────────────────
+
+function checkServerPort(host, port) {
+  return new Promise(resolve => {
+    const s = net.createConnection(port, host);
+    const t = setTimeout(() => { s.destroy(); resolve(false); }, 3000);
+    s.once('connect', () => { clearTimeout(t); s.destroy(); resolve(true); });
+    s.once('error',   () => { clearTimeout(t); s.destroy(); resolve(false); });
+  });
+}
+
+app.get('/api/hosted', requireAuth, async (req, res) => {
+  const servers = listHostedServers();
+  const result = await Promise.all(servers.map(async s => ({
+    ...s,
+    online: await checkServerPort(s.host, s.port),
+  })));
+  res.json(result);
+});
+
+app.post('/api/hosted', requireAuth, requireAdmin, (req, res) => {
+  if (!req.body.name) return res.status(400).json({ error: 'Name required' });
+  try { res.status(201).json(createHostedServer(req.body)); }
+  catch (err) { res.status(400).json({ error: err.message }); }
+});
+
+app.put('/api/hosted/:id', requireAuth, requireAdmin, (req, res) => {
+  const s = updateHostedServer(req.params.id, req.body);
+  if (!s) return res.status(404).json({ error: 'Server not found' });
+  res.json(s);
+});
+
+app.delete('/api/hosted/:id', requireAuth, requireAdmin, (req, res) => {
+  if (!getHostedServerById(req.params.id)) return res.status(404).json({ error: 'Server not found' });
+  deleteHostedServer(req.params.id);
+  res.json({ ok: true });
+});
+
+app.post('/api/hosted/:id/start', requireAuth, requireAdmin, (req, res) => {
+  const s = getHostedServerById(req.params.id);
+  if (!s) return res.status(404).json({ error: 'Server not found' });
+  if (!s.start_command) return res.status(400).json({ error: 'No start command configured' });
+  exec(s.start_command, () => {});
+  res.json({ ok: true });
+});
+
+app.post('/api/hosted/:id/stop', requireAuth, requireAdmin, (req, res) => {
+  const s = getHostedServerById(req.params.id);
+  if (!s) return res.status(404).json({ error: 'Server not found' });
+  if (!s.stop_command) return res.status(400).json({ error: 'No stop command configured' });
+  exec(s.stop_command, () => {});
   res.json({ ok: true });
 });
 
