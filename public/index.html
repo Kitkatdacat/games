@@ -219,13 +219,15 @@
           </div>
           <div id="admin-tab-hosted-servers" class="admin-tab-panel hidden">
             <div id="admin-hosted-list"></div>
-            <div class="admin-add-row">
+            <div class="admin-add-row" style="flex-wrap:wrap;gap:8px">
               <input type="text" id="hosted-name-input" placeholder="Server name…" />
               <input type="text" id="hosted-host-input" placeholder="Host / IP…" style="width:130px" />
               <input type="number" id="hosted-port-input" placeholder="Port" style="width:70px" value="25565" />
               <input type="text" id="hosted-start-input" placeholder="Start command…" style="width:170px" />
               <input type="text" id="hosted-stop-input" placeholder="Stop command…" style="width:170px" />
               <input type="text" id="hosted-desc-input" placeholder="Description (optional)…" style="width:170px" />
+              <input type="text" id="hosted-image-input" placeholder="Image path (e.g. img/servers/vanilla.jpg)…" style="width:230px" />
+              <input type="text" id="hosted-config-input" placeholder="server.properties path (absolute)…" style="width:250px" />
               <button class="btn btn-accent" id="hosted-add-btn">Add</button>
             </div>
           </div>

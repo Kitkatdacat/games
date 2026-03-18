@@ -959,9 +959,11 @@ function setupEvents() {
     const stop  = $id('hosted-stop-input').value.trim();
     const desc  = $id('hosted-desc-input').value.trim();
     if (!name || !host) { toast('Name and host are required', 'error'); return; }
+    const image  = $id('hosted-image-input').value.trim();
+    const config = $id('hosted-config-input').value.trim();
     try {
-      await api('POST', '/api/hosted', { name, host, port, start_command: start, stop_command: stop, description: desc });
-      ['hosted-name-input','hosted-host-input','hosted-start-input','hosted-stop-input','hosted-desc-input'].forEach(id => { $id(id).value = ''; });
+      await api('POST', '/api/hosted', { name, host, port, start_command: start, stop_command: stop, description: desc, image, config_path: config });
+      ['hosted-name-input','hosted-host-input','hosted-start-input','hosted-stop-input','hosted-desc-input','hosted-image-input','hosted-config-input'].forEach(id => { $id(id).value = ''; });
       $id('hosted-port-input').value = '25565';
       toast('Server added');
       renderAdminHosted();
@@ -1184,39 +1186,157 @@ async function renderHosted() {
   }
 
   const isAdmin = currentUser && currentUser.role === 'admin';
+
   grid.innerHTML = hostedServers.map(s => `
-    <div class="hosted-card${s.online ? ' hosted-card--online' : ''}" data-id="${esc(s.id)}">
-      <div class="hosted-card-status">${s.online
-        ? '<span class="hosted-badge hosted-badge--online">ONLINE</span>'
-        : '<span class="hosted-badge hosted-badge--offline">OFFLINE</span>'}</div>
-      <div class="hosted-card-name">${esc(s.name)}</div>
-      ${s.description ? `<div class="hosted-card-desc">${esc(s.description)}</div>` : ''}
-      <div class="hosted-card-meta">${esc(s.host)}:${s.port}</div>
-      ${isAdmin ? `
-      <label class="hosted-toggle" title="${s.online ? 'Stop server' : 'Start server'}">
-        <input type="checkbox" class="hosted-toggle-input" data-id="${esc(s.id)}" ${s.online ? 'checked' : ''}>
-        <span class="hosted-toggle-track"><span class="hosted-toggle-thumb"></span></span>
-      </label>` : ''}
+    <div class="server-tile${s.online ? ' server-tile--online' : ''}" data-id="${esc(s.id)}">
+      <div class="server-tile-bg" ${s.image ? `style="background-image:url('${esc(s.image)}')"` : ''}></div>
+      <div class="server-tile-scrim"></div>
+      <div class="server-tile-body">
+        <div class="server-tile-info">
+          <div class="server-tile-status">
+            <span class="server-tile-badge ${s.online ? 'server-tile-badge--online' : 'server-tile-badge--offline'}">
+              ${s.online ? '● ONLINE' : '○ OFFLINE'}
+            </span>
+          </div>
+          <div class="server-tile-name">${esc(s.name)}</div>
+          ${s.description ? `<div class="server-tile-desc">${esc(s.description)}</div>` : ''}
+          <div class="server-tile-meta">${esc(s.host)}:${s.port}</div>
+        </div>
+        <div class="server-tile-controls">
+          ${isAdmin ? `
+          <button class="server-power-btn ${s.online ? 'server-power-btn--on' : 'server-power-btn--off'}" data-id="${esc(s.id)}" data-online="${s.online}" title="${s.online ? 'Stop server' : 'Start server'}">
+            <img src="img/servers/${s.online ? 'power-on' : 'power-off'}.svg" alt="${s.online ? 'Stop' : 'Start'}">
+            <span>${s.online ? 'Running' : 'Stopped'}</span>
+          </button>
+          ` : `
+          <div class="server-power-display">
+            <img src="img/servers/${s.online ? 'power-on' : 'power-off'}.svg" alt="">
+          </div>
+          `}
+          ${isAdmin && s.config_path ? `
+          <button class="server-tile-cfg-btn" data-id="${esc(s.id)}">⚙ Settings</button>
+          ` : ''}
+        </div>
+      </div>
+      ${isAdmin && s.config_path ? `
+      <div class="server-tile-cfg hidden" data-cfg-id="${esc(s.id)}">
+        <div class="server-cfg-loading">Loading settings…</div>
+      </div>
+      ` : ''}
     </div>
   `).join('');
 
+  // Power button handlers
   if (isAdmin) {
-    grid.querySelectorAll('.hosted-toggle-input').forEach(cb => {
-      cb.addEventListener('change', async () => {
-        const id = cb.dataset.id;
-        const turnOn = cb.checked;
-        cb.disabled = true;
+    grid.querySelectorAll('.server-power-btn').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const id = btn.dataset.id;
+        const isOn = btn.dataset.online === 'true';
+        btn.disabled = true;
+        btn.classList.add('server-power-btn--busy');
         try {
-          await api('POST', `/api/hosted/${id}/${turnOn ? 'start' : 'stop'}`);
-          toast(turnOn ? 'Start command sent' : 'Stop command sent');
+          await api('POST', `/api/hosted/${id}/${isOn ? 'stop' : 'start'}`);
+          toast(isOn ? 'Stop command sent' : 'Start command sent');
           setTimeout(() => renderHosted(), 3000);
         } catch (err) {
           toast(err.message, 'error');
-          cb.checked = !turnOn;
-        } finally { cb.disabled = false; }
+          btn.disabled = false;
+          btn.classList.remove('server-power-btn--busy');
+        }
+      });
+    });
+
+    // Settings toggle
+    grid.querySelectorAll('.server-tile-cfg-btn').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const id = btn.dataset.id;
+        const panel = grid.querySelector(`.server-tile-cfg[data-cfg-id="${id}"]`);
+        if (!panel) return;
+        const isOpen = !panel.classList.contains('hidden');
+        if (isOpen) { panel.classList.add('hidden'); btn.textContent = '⚙ Settings'; return; }
+        panel.classList.remove('hidden');
+        btn.textContent = '⚙ Hide Settings';
+        if (panel.querySelector('.server-cfg-loading')) {
+          try {
+            const cfg = await api('GET', `/api/hosted/${id}/config`);
+            panel.innerHTML = renderCfgPanel(id, cfg);
+            bindCfgSave(panel, id);
+          } catch { panel.innerHTML = '<div class="server-cfg-error">Could not load config.</div>'; }
+        }
       });
     });
   }
+}
+
+function renderCfgPanel(id, cfg) {
+  const val = k => esc(cfg[k] ?? '');
+  const tog = (k, label) => `
+    <label class="cfg-toggle-row">
+      <span class="cfg-label">${label}</span>
+      <label class="cfg-switch">
+        <input type="checkbox" class="cfg-chk" data-key="${k}" ${cfg[k] === 'true' ? 'checked' : ''}>
+        <span class="cfg-switch-track"><span class="cfg-switch-thumb"></span></span>
+      </label>
+    </label>`;
+  return `
+    <div class="server-cfg-panel">
+      <div class="server-cfg-grid">
+        <div class="cfg-field">
+          <label class="cfg-label">Difficulty</label>
+          <select class="cfg-select" data-key="difficulty">
+            ${['peaceful','easy','normal','hard'].map(d => `<option value="${d}" ${cfg.difficulty===d?'selected':''}>${d.charAt(0).toUpperCase()+d.slice(1)}</option>`).join('')}
+          </select>
+        </div>
+        <div class="cfg-field">
+          <label class="cfg-label">Game Mode</label>
+          <select class="cfg-select" data-key="gamemode">
+            ${['survival','creative','adventure','spectator'].map(d => `<option value="${d}" ${cfg.gamemode===d?'selected':''}>${d.charAt(0).toUpperCase()+d.slice(1)}</option>`).join('')}
+          </select>
+        </div>
+        <div class="cfg-field">
+          <label class="cfg-label">Max Players</label>
+          <input class="cfg-input" type="number" data-key="max-players" value="${val('max-players')}" min="1" max="500">
+        </div>
+        <div class="cfg-field">
+          <label class="cfg-label">View Distance</label>
+          <input class="cfg-input" type="number" data-key="view-distance" value="${val('view-distance')}" min="2" max="32">
+        </div>
+        <div class="cfg-field cfg-field--full">
+          <label class="cfg-label">MOTD</label>
+          <input class="cfg-input" type="text" data-key="motd" value="${val('motd')}">
+        </div>
+        ${tog('white-list','Whitelist')}
+        ${tog('pvp','PvP')}
+        ${tog('enable-command-block','Command Blocks')}
+        ${tog('online-mode','Online Mode')}
+        ${tog('allow-flight','Allow Flight')}
+        ${tog('spawn-monsters','Spawn Monsters')}
+      </div>
+      <div class="server-cfg-footer">
+        <button class="btn btn-accent cfg-save-btn">Save Changes</button>
+        <span class="cfg-save-status"></span>
+      </div>
+    </div>`;
+}
+
+function bindCfgSave(panel, id) {
+  panel.querySelector('.cfg-save-btn').addEventListener('click', async () => {
+    const changes = {};
+    panel.querySelectorAll('[data-key]').forEach(el => {
+      changes[el.dataset.key] = el.type === 'checkbox' ? String(el.checked) : el.value;
+    });
+    const status = panel.querySelector('.cfg-save-status');
+    status.textContent = 'Saving…';
+    try {
+      await api('PATCH', `/api/hosted/${id}/config`, changes);
+      status.textContent = '✓ Saved — restart server to apply';
+      status.style.color = 'var(--success)';
+      setTimeout(() => { status.textContent = ''; }, 4000);
+    } catch (err) {
+      status.textContent = '✗ ' + err.message;
+      status.style.color = 'var(--danger)';
+    }
+  });
 }
 
 async function renderAdminHosted() {
@@ -1237,6 +1357,8 @@ async function renderAdminHosted() {
       </div>
       ${s.description ? `<div style="font-size:11px;color:var(--text-3)">${esc(s.description)}</div>` : ''}
       <div style="font-size:11px;color:var(--text-3)">Start: <code>${esc(s.start_command || '—')}</code> &nbsp; Stop: <code>${esc(s.stop_command || '—')}</code></div>
+      ${s.config_path ? `<div style="font-size:11px;color:var(--text-3)">Config: <code>${esc(s.config_path)}</code></div>` : ''}
+      ${s.image ? `<div style="font-size:11px;color:var(--text-3)">Image: <code>${esc(s.image)}</code></div>` : ''}
     </div>
   `).join('')}</div>`;
   list.querySelectorAll('.admin-lookup-delete').forEach(btn => {

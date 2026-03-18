@@ -82,8 +82,13 @@ db.exec(`
     port          INTEGER NOT NULL DEFAULT 25565,
     start_command TEXT NOT NULL DEFAULT '',
     stop_command  TEXT NOT NULL DEFAULT '',
+    image         TEXT NOT NULL DEFAULT '',
+    config_path   TEXT NOT NULL DEFAULT '',
     created_at    TEXT NOT NULL
   );
+  -- migrate older installs that lack these columns
+  ` + (() => { try { db.prepare('SELECT image FROM hosted_servers LIMIT 1').get(); } catch { db.prepare("ALTER TABLE hosted_servers ADD COLUMN image TEXT NOT NULL DEFAULT ''").run(); } return ''; })() + `
+  ` + (() => { try { db.prepare('SELECT config_path FROM hosted_servers LIMIT 1').get(); } catch { db.prepare("ALTER TABLE hosted_servers ADD COLUMN config_path TEXT NOT NULL DEFAULT ''").run(); } return ''; })() + `
 
   CREATE INDEX IF NOT EXISTS idx_ul_user   ON user_library(user_id);
   CREATE INDEX IF NOT EXISTS idx_ul_game   ON user_library(game_id);
@@ -91,6 +96,12 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_ps_user   ON playtime_sessions(user_id, game_id);
   CREATE INDEX IF NOT EXISTS idx_roms_sys  ON roms(system);
 `);
+
+// Migrate hosted_servers columns for older installs
+for (const col of ['image', 'config_path']) {
+  try { db.prepare(`SELECT ${col} FROM hosted_servers LIMIT 1`).get(); }
+  catch { db.prepare(`ALTER TABLE hosted_servers ADD COLUMN ${col} TEXT NOT NULL DEFAULT ''`).run(); }
+}
 
 // Seed default genres and platforms if empty
 const genreCount = db.prepare('SELECT COUNT(*) AS n FROM genres').get().n;
@@ -361,10 +372,11 @@ function createHostedServer(data) {
   const id  = crypto.randomUUID();
   const now = new Date().toISOString();
   db.prepare(`
-    INSERT INTO hosted_servers (id, name, description, host, port, start_command, stop_command, created_at)
-    VALUES (?,?,?,?,?,?,?,?)
+    INSERT INTO hosted_servers (id, name, description, host, port, start_command, stop_command, image, config_path, created_at)
+    VALUES (?,?,?,?,?,?,?,?,?,?)
   `).run(id, data.name, data.description || '', data.host || '127.0.0.1',
-    data.port || 25565, data.start_command || '', data.stop_command || '', now);
+    data.port || 25565, data.start_command || '', data.stop_command || '',
+    data.image || '', data.config_path || '', now);
   return getHostedServerById(id);
 }
 
@@ -372,7 +384,7 @@ function updateHostedServer(id, data) {
   const existing = getHostedServerById(id);
   if (!existing) return null;
   const fields = [], params = [];
-  for (const k of ['name','description','host','port','start_command','stop_command']) {
+  for (const k of ['name','description','host','port','start_command','stop_command','image','config_path']) {
     if (data[k] !== undefined) { fields.push(`${k} = ?`); params.push(data[k]); }
   }
   if (!fields.length) return existing;

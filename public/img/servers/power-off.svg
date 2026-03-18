@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <defs>
+    <radialGradient id="bg" cx="50%" cy="40%" r="60%">
+      <stop offset="0%" stop-color="#2a2a2a"/>
+      <stop offset="100%" stop-color="#111111"/>
+    </radialGradient>
+    <filter id="glow">
+      <feGaussianBlur stdDeviation="2.5" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <filter id="outer-glow">
+      <feGaussianBlur stdDeviation="4" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+  <!-- Outer shadow ring -->
+  <circle cx="50" cy="50" r="47" fill="#0a0a0a"/>
+  <!-- Outer dark bezel -->
+  <circle cx="50" cy="50" r="45" fill="#1a1a1a"/>
+  <!-- Red glowing ring -->
+  <circle cx="50" cy="50" r="40" fill="none" stroke="#ff2222" stroke-width="3.5" opacity="0.9" filter="url(#outer-glow)"/>
+  <circle cx="50" cy="50" r="40" fill="none" stroke="#cc1111" stroke-width="2"/>
+  <!-- Inner button face -->
+  <circle cx="50" cy="50" r="36" fill="url(#bg)"/>
+  <!-- Power icon -->
+  <g filter="url(#glow)" stroke="#ff2222" stroke-width="5" stroke-linecap="round" fill="none">
+    <line x1="50" y1="28" x2="50" y2="44"/>
+    <path d="M38,35 A16,16 0 1,0 62,35"/>
+  </g>
+  <!-- Subtle inner shine -->
+  <ellipse cx="50" cy="32" rx="14" ry="6" fill="white" opacity="0.04"/>
+</svg>

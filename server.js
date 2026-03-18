@@ -317,6 +317,37 @@ app.post('/api/hosted/:id/stop', requireAuth, requireAdmin, (req, res) => {
   res.json({ ok: true });
 });
 
+app.get('/api/hosted/:id/config', requireAuth, requireAdmin, (req, res) => {
+  const s = getHostedServerById(req.params.id);
+  if (!s) return res.status(404).json({ error: 'Server not found' });
+  if (!s.config_path) return res.json({});
+  try {
+    const raw = fs.readFileSync(s.config_path, 'utf8');
+    const cfg = {};
+    for (const line of raw.split('\n')) {
+      if (line.startsWith('#') || !line.includes('=')) continue;
+      const eq = line.indexOf('=');
+      cfg[line.slice(0, eq).trim()] = line.slice(eq + 1).trim();
+    }
+    res.json(cfg);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.patch('/api/hosted/:id/config', requireAuth, requireAdmin, (req, res) => {
+  const s = getHostedServerById(req.params.id);
+  if (!s) return res.status(404).json({ error: 'Server not found' });
+  if (!s.config_path) return res.status(400).json({ error: 'No config path set' });
+  try {
+    let raw = fs.readFileSync(s.config_path, 'utf8');
+    for (const [key, val] of Object.entries(req.body)) {
+      const re = new RegExp(`^(${key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}=).*$`, 'm');
+      raw = re.test(raw) ? raw.replace(re, `$1${val}`) : raw + `\n${key}=${val}`;
+    }
+    fs.writeFileSync(s.config_path, raw);
+    res.json({ ok: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 // ── Start ─────────────────────────────────────────────────────────────────────
 
 if (require.main === module) {
