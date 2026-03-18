@@ -86,9 +86,6 @@ db.exec(`
     config_path   TEXT NOT NULL DEFAULT '',
     created_at    TEXT NOT NULL
   );
-  -- migrate older installs that lack these columns
-  ` + (() => { try { db.prepare('SELECT image FROM hosted_servers LIMIT 1').get(); } catch { db.prepare("ALTER TABLE hosted_servers ADD COLUMN image TEXT NOT NULL DEFAULT ''").run(); } return ''; })() + `
-  ` + (() => { try { db.prepare('SELECT config_path FROM hosted_servers LIMIT 1').get(); } catch { db.prepare("ALTER TABLE hosted_servers ADD COLUMN config_path TEXT NOT NULL DEFAULT ''").run(); } return ''; })() + `
 
   CREATE INDEX IF NOT EXISTS idx_ul_user   ON user_library(user_id);
   CREATE INDEX IF NOT EXISTS idx_ul_game   ON user_library(game_id);
