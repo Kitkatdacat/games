@@ -22,6 +22,7 @@ const {
   listPlatforms, createPlatform, deletePlatform,
   listRoms, getRomById, createRom, deleteRom,
   listHostedServers, getHostedServerById, createHostedServer, updateHostedServer, deleteHostedServer,
+  listReviews, getReviewByUser, upsertReview, deleteReview,
 } = require('./db');
 
 const romsDir = path.join(__dirname, 'roms');
@@ -141,7 +142,7 @@ app.post('/api/library', requireAuth, (req, res) => {
   if (!game_id) return res.status(400).json({ error: 'game_id required' });
   if (!getGameById(game_id)) return res.status(404).json({ error: 'Game not found' });
   try {
-    const entry = upsertLibraryEntry(req.user.id, game_id, { status: status || 'wishlist' });
+    const entry = upsertLibraryEntry(req.user.id, game_id, { status: status || 'backlog' });
     res.status(201).json(entry);
   } catch (err) { res.status(400).json({ error: err.message }); }
 });
@@ -172,6 +173,11 @@ app.post('/api/games/:id/sessions/start', requireAuth, (req, res) => {
   if (open) endSession(open.id);
   try {
     const session = startSession(req.user.id, req.params.id, req.body.notes);
+    // Auto-set started_at on first ever session
+    const entry = getLibraryEntry(req.user.id, req.params.id);
+    if (entry && !entry.started_at) {
+      upsertLibraryEntry(req.user.id, req.params.id, { started_at: session.started_at });
+    }
     res.status(201).json(session);
   } catch (err) { res.status(400).json({ error: err.message }); }
 });
@@ -189,6 +195,11 @@ app.post('/api/games/:id/sessions', requireAuth, (req, res) => {
     return res.status(400).json({ error: 'started_at, ended_at, duration_min required' });
   try {
     const session = createManualSession(req.user.id, req.params.id, req.body);
+    // Auto-set started_at on first ever session
+    const entry = getLibraryEntry(req.user.id, req.params.id);
+    if (entry && !entry.started_at) {
+      upsertLibraryEntry(req.user.id, req.params.id, { started_at: session.started_at });
+    }
     res.status(201).json(session);
   } catch (err) { res.status(400).json({ error: err.message }); }
 });
@@ -198,6 +209,68 @@ app.delete('/api/games/:id/sessions/:sid', requireAuth, (req, res) => {
   if (!session || session.user_id !== req.user.id) return res.status(404).json({ error: 'Session not found' });
   deletePlaytimeSession(req.params.sid);
   res.json({ ok: true });
+});
+
+// ── Reviews ───────────────────────────────────────────────────────────────────
+
+app.get('/api/games/:id/reviews', requireAuth, (req, res) => {
+  res.json(listReviews(req.params.id));
+});
+
+app.put('/api/games/:id/reviews', requireAuth, (req, res) => {
+  const { rating, body } = req.body;
+  if (!rating || !body?.trim()) return res.status(400).json({ error: 'rating and body required' });
+  if (rating < 1 || rating > 5) return res.status(400).json({ error: 'rating must be 1–5' });
+  const review = upsertReview({
+    gameId: req.params.id,
+    userId: req.user.id,
+    username: req.user.username,
+    rating: parseInt(rating),
+    body: body.trim(),
+  });
+  res.json(review);
+});
+
+app.delete('/api/games/:id/reviews', requireAuth, (req, res) => {
+  const review = getReviewByUser(req.params.id, req.user.id);
+  if (!review) return res.status(404).json({ error: 'Review not found' });
+  deleteReview(review.id);
+  res.json({ ok: true });
+});
+
+// ── RAWG Lookup ───────────────────────────────────────────────────────────────
+
+const RAWG_KEY = '4c0c771ed45649dbaa766c35a88bd940';
+
+app.get('/api/rawg/search', requireAuth, requireAdmin, async (req, res) => {
+  const q = req.query.q;
+  if (!q) return res.status(400).json({ error: 'q required' });
+  const r = await fetch(`https://api.rawg.io/api/games?key=${RAWG_KEY}&search=${encodeURIComponent(q)}&page_size=6`);
+  const data = await r.json();
+  res.json((data.results || []).map(g => ({
+    id: g.id, name: g.name,
+    cover: g.background_image,
+    year: g.released ? parseInt(g.released) : null,
+    metacritic: g.metacritic,
+    slug: g.slug,
+  })));
+});
+
+app.get('/api/rawg/game/:slug', requireAuth, requireAdmin, async (req, res) => {
+  const r = await fetch(`https://api.rawg.io/api/games/${req.params.slug}?key=${RAWG_KEY}`);
+  const g = await r.json();
+  res.json({
+    title:       g.name,
+    description: g.description_raw || '',
+    cover_url:   g.background_image || '',
+    release_year: g.released ? parseInt(g.released) : null,
+    developer:   g.developers?.[0]?.name || '',
+    publisher:   g.publishers?.[0]?.name || '',
+    genres:      (g.genres || []).map(x => x.name),
+    platforms:   (g.platforms || []).map(x => x.platform.name),
+    metacritic:  g.metacritic || null,
+    rating_esrb: g.esrb_rating?.name || null,
+  });
 });
 
 // ── Genres ────────────────────────────────────────────────────────────────────
@@ -247,7 +320,13 @@ app.post('/api/roms', requireAuth, requireAdmin, romUpload.single('rom'), (req, 
   }
 });
 
-app.get('/api/roms/:id/file', requireAuth, (req, res) => {
+app.get('/api/roms/:id', requireAuth, (req, res) => {
+  const rom = getRomById(req.params.id);
+  if (!rom) return res.status(404).json({ error: 'ROM not found' });
+  res.json(rom);
+});
+
+app.get('/api/roms/:id/file', (req, res) => {
   const rom = getRomById(req.params.id);
   if (!rom) return res.status(404).json({ error: 'ROM not found' });
   const filePath = path.join(romsDir, rom.filename);

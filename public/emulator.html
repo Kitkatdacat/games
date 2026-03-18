@@ -7,10 +7,39 @@
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { background: #000; width: 100vw; height: 100vh; overflow: hidden; }
     #game { width: 100%; height: 100%; }
+    #emu-controls {
+      position: fixed; top: 12px; left: 12px;
+      display: flex; gap: 8px; z-index: 9999;
+      opacity: 0.2; transition: opacity 200ms ease;
+    }
+    #emu-controls:hover { opacity: 1; }
+    .emu-btn {
+      background: rgba(0,0,0,0.7);
+      border: 1px solid rgba(0,216,255,0.4);
+      color: #00d8ff;
+      font-size: 11px; font-weight: 700; font-family: sans-serif;
+      letter-spacing: .08em; text-transform: uppercase;
+      padding: 6px 12px; border-radius: 5px;
+      cursor: pointer; backdrop-filter: blur(8px);
+      transition: all 150ms ease;
+    }
+    .emu-btn:hover {
+      border-color: #00d8ff;
+      box-shadow: 0 0 10px rgba(0,216,255,0.5);
+      text-shadow: 0 0 6px #00d8ff;
+    }
+    .emu-btn--green { border-color: rgba(0,255,24,0.4); color: #00ff18; }
+    .emu-btn--green:hover { border-color: #00ff18; box-shadow: 0 0 10px rgba(0,255,24,0.5); text-shadow: 0 0 6px #00ff18; }
   </style>
 </head>
 <body>
   <div id="game"></div>
+  <div id="emu-controls">
+    <button class="emu-btn emu-btn--green" id="emu-play">▶ Play</button>
+    <button class="emu-btn" id="emu-pause">⏸ Pause</button>
+    <button class="emu-btn" id="emu-qsave">💾 Save</button>
+    <button class="emu-btn" id="emu-qload">⏪ Load</button>
+  </div>
   <script>
     const params = new URLSearchParams(window.location.search);
     window.EJS_player        = '#game';
@@ -18,6 +47,46 @@
     window.EJS_gameUrl       = params.get('rom');
     window.EJS_pathtodata    = 'https://cdn.emulatorjs.org/stable/data/';
     window.EJS_startOnLoaded = true;
+    window.EJS_Buttons = {
+      playPause:     { visible: false },
+      restart:       { visible: false },
+      mute:          { visible: false },
+      volume:        { visible: false },
+      saveState:     { visible: false },
+      loadState:     { visible: false },
+      quickSave:     { visible: false },
+      quickLoad:     { visible: false },
+      screenshot:    { visible: false },
+      screenRecord:  { visible: false },
+      gamepad:       { visible: false },
+      cheat:         { visible: false },
+      cacheManager:  { visible: false },
+      saveSavFiles:  { visible: false },
+      loadSavFiles:  { visible: false },
+      fullscreen:    { visible: true },
+      exitEmulation: { visible: true, callback: () => window.parent.closeEmulator() },
+      settings:      { visible: true },
+    };
+
+    const HIDDEN_TABS = ['controls', 'input', 'core', 'backend', 'screen capture', 'screen record'];
+
+    window.EJS_ready = function() {
+      document.addEventListener('contextmenu', e => e.preventDefault(), true);
+
+      document.getElementById('emu-play').addEventListener('click',  () => window.EJS_emulator.play());
+      document.getElementById('emu-pause').addEventListener('click', () => window.EJS_emulator.pause());
+      document.getElementById('emu-qsave').addEventListener('click', () => window.EJS_emulator.gameManager.quickSave(1));
+      document.getElementById('emu-qload').addEventListener('click', () => window.EJS_emulator.gameManager.quickLoad(1));
+
+      // Watch for settings panel and hide unwanted tabs
+      const observer = new MutationObserver(() => {
+        document.querySelectorAll('.ejs_settings_main_bar > *, .ejs_setting_menu > *').forEach(el => {
+          const txt = el.textContent.trim().toLowerCase();
+          if (HIDDEN_TABS.some(t => txt.startsWith(t))) el.style.display = 'none';
+        });
+      });
+      observer.observe(document.body, { childList: true, subtree: true });
+    };
   </script>
   <script src="https://cdn.emulatorjs.org/stable/data/loader.js"></script>
 </body>

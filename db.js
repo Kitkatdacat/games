@@ -87,11 +87,23 @@ db.exec(`
     created_at    TEXT NOT NULL
   );
 
+  CREATE TABLE IF NOT EXISTS reviews (
+    id         TEXT PRIMARY KEY,
+    game_id    TEXT NOT NULL REFERENCES games(id) ON DELETE CASCADE,
+    user_id    TEXT NOT NULL,
+    username   TEXT NOT NULL,
+    rating     INTEGER NOT NULL CHECK(rating BETWEEN 1 AND 5),
+    body       TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL,
+    UNIQUE(user_id, game_id)
+  );
+
   CREATE INDEX IF NOT EXISTS idx_ul_user   ON user_library(user_id);
   CREATE INDEX IF NOT EXISTS idx_ul_game   ON user_library(game_id);
   CREATE INDEX IF NOT EXISTS idx_ul_status ON user_library(user_id, status);
   CREATE INDEX IF NOT EXISTS idx_ps_user   ON playtime_sessions(user_id, game_id);
   CREATE INDEX IF NOT EXISTS idx_roms_sys  ON roms(system);
+  CREATE INDEX IF NOT EXISTS idx_reviews_game ON reviews(game_id);
 `);
 
 // Migrate hosted_servers columns for older installs
@@ -99,6 +111,10 @@ for (const col of ['image', 'config_path']) {
   try { db.prepare(`SELECT ${col} FROM hosted_servers LIMIT 1`).get(); }
   catch { db.prepare(`ALTER TABLE hosted_servers ADD COLUMN ${col} TEXT NOT NULL DEFAULT ''`).run(); }
 }
+
+// Migrate games.rom_id
+try { db.prepare('SELECT rom_id FROM games LIMIT 1').get(); }
+catch { db.prepare('ALTER TABLE games ADD COLUMN rom_id TEXT').run(); }
 
 // Seed default genres and platforms if empty
 const genreCount = db.prepare('SELECT COUNT(*) AS n FROM genres').get().n;
@@ -149,14 +165,14 @@ function createGame(data, userId) {
   db.prepare(`
     INSERT INTO games (id, title, description, cover_url, hero_url, release_year,
       developer, publisher, genres, platforms, tags, rating_esrb, metacritic,
-      trailer_url, created_at, updated_at, created_by)
-    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+      trailer_url, rom_id, created_at, updated_at, created_by)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
   `).run(
     id, data.title, data.description || '', data.cover_url || '', data.hero_url || '',
     data.release_year || null, data.developer || '', data.publisher || '',
     JSON.stringify(data.genres || []), JSON.stringify(data.platforms || []),
     JSON.stringify(data.tags || []), data.rating_esrb || null,
-    data.metacritic || null, data.trailer_url || null, now, now, userId
+    data.metacritic || null, data.trailer_url || null, data.rom_id || null, now, now, userId
   );
   return getGameById(id);
 }
@@ -168,7 +184,7 @@ function updateGame(id, data) {
   const fields = [];
   const params = [];
   const allowed = ['title','description','cover_url','hero_url','release_year',
-    'developer','publisher','rating_esrb','metacritic','trailer_url'];
+    'developer','publisher','rating_esrb','metacritic','trailer_url','rom_id'];
   for (const k of allowed) {
     if (data[k] !== undefined) { fields.push(`${k} = ?`); params.push(data[k] ?? null); }
   }
@@ -394,6 +410,32 @@ function deleteHostedServer(id) {
   db.prepare('DELETE FROM hosted_servers WHERE id = ?').run(id);
 }
 
+// ── Reviews ───────────────────────────────────────────────────────────────────
+
+function listReviews(gameId) {
+  return db.prepare('SELECT * FROM reviews WHERE game_id = ? ORDER BY created_at DESC').all(gameId);
+}
+
+function getReviewByUser(gameId, userId) {
+  return db.prepare('SELECT * FROM reviews WHERE game_id = ? AND user_id = ?').get(gameId, userId) || null;
+}
+
+function upsertReview({ gameId, userId, username, rating, body }) {
+  const existing = getReviewByUser(gameId, userId);
+  const now = new Date().toISOString();
+  if (existing) {
+    db.prepare('UPDATE reviews SET rating = ?, body = ?, created_at = ? WHERE id = ?').run(rating, body, now, existing.id);
+    return db.prepare('SELECT * FROM reviews WHERE id = ?').get(existing.id);
+  }
+  const id = crypto.randomUUID();
+  db.prepare('INSERT INTO reviews (id, game_id, user_id, username, rating, body, created_at) VALUES (?,?,?,?,?,?,?)').run(id, gameId, userId, username, rating, body, now);
+  return db.prepare('SELECT * FROM reviews WHERE id = ?').get(id);
+}
+
+function deleteReview(id) {
+  db.prepare('DELETE FROM reviews WHERE id = ?').run(id);
+}
+
 module.exports = {
   listGames, getGameById, createGame, updateGame, deleteGame,
   getLibraryEntry, listLibrary, upsertLibraryEntry, removeLibraryEntry, getLibraryStats,
@@ -403,4 +445,5 @@ module.exports = {
   listPlatforms, createPlatform, deletePlatform,
   listRoms, getRomById, createRom, deleteRom,
   listHostedServers, getHostedServerById, createHostedServer, updateHostedServer, deleteHostedServer,
+  listReviews, getReviewByUser, upsertReview, deleteReview,
 };

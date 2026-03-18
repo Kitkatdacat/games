@@ -20,6 +20,7 @@ let games           = [];
 let genres          = [];
 let platforms       = [];
 let activeGameId    = null;
+let activeReviewRating = 0;
 let activeView      = 'home';
 let activeSessions  = {};     // gameId -> open session object
 let searchQuery     = '';
@@ -29,7 +30,6 @@ let filterPlatform  = '';
 let heroGames       = [];
 let heroIndex       = 0;
 let heroTimer       = null;
-let currentRating   = 0;
 let editingGameId   = null;   // null = creating new
 let hostedServers   = [];
 let hostedPollTimer = null;
@@ -73,7 +73,7 @@ function timeAgo(iso) {
 }
 
 function statusLabel(s) {
-  return { playing:'Playing', backlog:'Backlog', completed:'Completed', dropped:'Dropped', wishlist:'Wishlist' }[s] || '';
+  return { playing:'Playing', backlog:'Backlog', completed:'Completed', dropped:'Dropped' }[s] || '';
 }
 
 function mcColor(score) {
@@ -123,7 +123,6 @@ async function loadApp() {
   $id('app').classList.remove('hidden');
 
   if (currentUser.role === 'admin') {
-    $id('nav-admin').classList.remove('hidden');
     $id('dd-admin').classList.remove('hidden');
   }
 
@@ -145,8 +144,9 @@ function setUserChip() {
   const name = `${currentUser.firstName || ''} ${currentUser.lastName || ''}`.trim() || currentUser.username;
   const initial = (currentUser.firstName?.[0] || currentUser.username[0]).toUpperCase();
   [$id('user-avatar'), $id('user-avatar-lg')].forEach(el => { if (el) el.textContent = initial; });
-  if ($id('user-full-name')) $id('user-full-name').textContent = name;
-  if ($id('user-username'))  $id('user-username').textContent  = '@' + currentUser.username;
+  if ($id('user-full-name'))     $id('user-full-name').textContent     = name;
+  if ($id('user-username'))      $id('user-username').textContent      = '@' + currentUser.username;
+  if ($id('user-username-nav'))  $id('user-username-nav').textContent  = currentUser.username;
 }
 
 async function refreshDropdownStats() {
@@ -216,7 +216,7 @@ function setAuthError(msg) {
 
 // ── View Switching ────────────────────────────────────────────────────────────
 
-function switchView(name) {
+async function switchView(name) {
   activeView = name;
   document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
   const target = document.querySelector(`.view[data-view="${name}"]`);
@@ -224,6 +224,7 @@ function switchView(name) {
   document.querySelectorAll('.nav-item').forEach(n => {
     n.classList.toggle('nav-item--active', n.dataset.view === name);
   });
+  await refreshData();
   if (name === 'home')      renderHome();
   if (name === 'library')   renderLibrary();
   if (name === 'search')    renderSearch();
@@ -265,7 +266,7 @@ function setHeroSlide(i) {
   heroIndex = ((i % heroGames.length) + heroGames.length) % heroGames.length;
   const g = heroGames[heroIndex];
   const bg = $id('hero-bg');
-  bg.style.backgroundImage = `url(${esc(g.hero_url || g.cover_url)})`;
+  bg.style.backgroundImage = `url('${(g.hero_url || g.cover_url).replace(/'/g, '%27')}')`;
 
   const badge = $id('hero-status-badge');
   const status = g.libraryEntry?.status;
@@ -273,7 +274,7 @@ function setHeroSlide(i) {
     badge.textContent = statusLabel(status);
     badge.className = '';
     badge.style.cssText = '';
-    const colors = { playing:'var(--accent)', completed:'var(--success)', backlog:'var(--surface-3)', dropped:'var(--danger)', wishlist:'#5B4F9E' };
+    const colors = { playing:'var(--accent)', completed:'var(--success)', backlog:'var(--surface-3)', dropped:'var(--danger)' };
     badge.style.background = colors[status] || 'var(--surface-3)';
     badge.style.color = '#fff';
     badge.style.padding = '3px 10px'; badge.style.borderRadius = '3px';
@@ -295,7 +296,31 @@ function setHeroSlide(i) {
     d.classList.toggle('active', idx === heroIndex)
   );
   $id('hero-detail-btn').onclick = () => openDetailModal(g.id);
-  $id('hero-play-btn').onclick   = () => openDetailModal(g.id);
+
+  const playBtn = $id('hero-play-btn');
+  function updateHeroLibBtn() {
+    const inLib = !!g.libraryEntry;
+    playBtn.textContent = inLib ? '— Remove from Library' : '+ Add to Library';
+    playBtn.className = 'btn-hero-lib' + (inLib ? ' in-library' : '');
+  }
+  updateHeroLibBtn();
+  playBtn.onclick = async () => {
+    const inLib = !!g.libraryEntry;
+    try {
+      if (!inLib) {
+        await api('PUT', `/api/library/${g.id}`, { status: 'backlog' });
+        toast('Added to library', 'success');
+      } else {
+        await api('DELETE', `/api/library/${g.id}`);
+        toast('Removed from library');
+      }
+      await refreshData();
+      // re-find game with updated libraryEntry
+      const updated = games.find(gg => gg.id === g.id);
+      if (updated) { g.libraryEntry = updated.libraryEntry; }
+      updateHeroLibBtn();
+    } catch (err) { toast(err.message, 'error'); }
+  };
 }
 
 function startHeroRotation() {
@@ -320,7 +345,6 @@ function renderHome() {
     { id: 'backlog',   label: 'Your Backlog',         list: gamesInStatus('backlog') },
     { id: 'top-rated', label: 'Top Rated',            list: topRated },
     { id: 'completed', label: 'Completed',            list: gamesInStatus('completed') },
-    { id: 'wishlist',  label: 'Wishlist',             list: gamesInStatus('wishlist') },
     { id: 'all',       label: 'All Games',            list: games },
   ];
 
@@ -331,11 +355,24 @@ function renderHome() {
 
   // Attach shelf scroll arrow events
   container.querySelectorAll('.shelf-arrow').forEach(btn => {
-    btn.addEventListener('click', e => {
+    btn.addEventListener('click', () => {
       const shelf = btn.closest('.shelf');
       const track = shelf.querySelector('.shelf-track');
-      const dir   = btn.classList.contains('shelf-arrow--right') ? 1 : -1;
-      track.scrollBy({ left: dir * (160 * 3), behavior: 'smooth' });
+      const isRight = btn.classList.contains('shelf-arrow--right');
+      const step = 160 * 3;
+      if (isRight) {
+        if (track.scrollLeft + track.clientWidth >= track.scrollWidth - 4) {
+          track.scrollTo({ left: 0, behavior: 'smooth' });
+        } else {
+          track.scrollBy({ left: step, behavior: 'smooth' });
+        }
+      } else {
+        if (track.scrollLeft <= 4) {
+          track.scrollTo({ left: track.scrollWidth, behavior: 'smooth' });
+        } else {
+          track.scrollBy({ left: -step, behavior: 'smooth' });
+        }
+      }
     });
   });
   container.querySelectorAll('.shelf-see-all').forEach(btn => {
@@ -352,27 +389,30 @@ function renderShelf(id, label, list) {
         <button class="shelf-see-all">See All</button>
       </div>
       <div class="shelf-track" id="shelf-track-${id}">
+        <button class="shelf-arrow shelf-arrow--left">&#8249;</button>
         ${list.map(renderGameCard).join('')}
+        <button class="shelf-arrow shelf-arrow--right">&#8250;</button>
       </div>
-      <button class="shelf-arrow shelf-arrow--left">&#8249;</button>
-      <button class="shelf-arrow shelf-arrow--right">&#8250;</button>
     </section>`;
 }
 
 // ── Game Card ─────────────────────────────────────────────────────────────────
 
-function renderGameCard(g) {
-  const status  = g.libraryEntry?.status || g.status || '';
+function renderGameCard(g, showStatus = false, showLibBtn = false) {
+  const status  = showStatus ? (g.libraryEntry?.status || g.status || '') : '';
+  const inLib   = !!g.libraryEntry;
   const mc      = g.metacritic;
   const chips   = (g.platforms || []).slice(0, 2).map(p => `<span class="chip" style="font-size:9px">${esc(p)}</span>`).join('');
   const mcBadge = mc ? `<span class="game-card-mc ${mcColor(mc)}">${mc}</span>` : '';
   const badge   = status ? `<div class="game-card-badge">${esc(statusLabel(status))}</div>` : '';
+  const libBtn  = showLibBtn ? `<button class="card-lib-btn${inLib ? ' in-library' : ''}" data-lib="${esc(g.id)}">${inLib ? '— Remove' : '+ Library'}</button>` : '';
   const style   = g.cover_url
-    ? `background-image:url(${esc(g.cover_url)})`
+    ? `background-image:url('${g.cover_url.replace(/'/g, '%27')}')`
     : 'background:linear-gradient(135deg,var(--surface-2),var(--surface-3))';
 
   return `
     <div class="game-card${status ? ' status-' + status : ''}" data-id="${esc(g.id)}" style="${style}">
+      ${libBtn}
       ${badge}
       ${!g.cover_url ? `<div class="game-card-no-cover">${esc(g.title)}</div>` : ''}
       <div class="game-card-overlay">
@@ -386,7 +426,30 @@ function renderGameCard(g) {
 
 function attachCardClicks(root) {
   root.querySelectorAll('.game-card[data-id]').forEach(card => {
-    card.addEventListener('click', () => openDetailModal(card.dataset.id));
+    card.addEventListener('click', e => {
+      if (e.target.closest('[data-lib]')) return;
+      openDetailModal(card.dataset.id);
+    });
+  });
+  root.querySelectorAll('[data-lib]').forEach(btn => {
+    btn.addEventListener('click', async e => {
+      e.stopPropagation();
+      const gameId = btn.dataset.lib;
+      const game = games.find(g => g.id === gameId);
+      const adding = !game?.libraryEntry;
+      try {
+        if (adding) {
+          await api('PUT', `/api/library/${gameId}`, { status: 'backlog' });
+          toast('Added to library', 'success');
+        } else {
+          await api('DELETE', `/api/library/${gameId}`);
+          toast('Removed from library');
+        }
+        await refreshData();
+        btn.textContent = adding ? '— Remove' : '+ Library';
+        btn.classList.toggle('in-library', adding);
+      } catch (err) { toast(err.message, 'error'); }
+    });
   });
 }
 
@@ -401,7 +464,7 @@ function renderLibrary() {
   if (!filtered.length) {
     grid.innerHTML = `<div class="empty-state"><strong>Nothing here yet.</strong><p>Add games to your library from the home screen or Browse.</p></div>`;
   } else {
-    grid.innerHTML = filtered.map(renderGameCard).join('');
+    grid.innerHTML = filtered.map(g => renderGameCard(g, true)).join('');
     attachCardClicks(grid);
   }
 
@@ -450,7 +513,7 @@ function applySearchFilter() {
   if (!result.length) {
     grid.innerHTML = `<div class="empty-state"><strong>No games found.</strong><p>Try different filters or add games via the Admin panel.</p></div>`;
   } else {
-    grid.innerHTML = result.map(renderGameCard).join('');
+    grid.innerHTML = result.map(g => renderGameCard(g, false, true)).join('');
     attachCardClicks(grid);
   }
 }
@@ -463,12 +526,39 @@ async function openDetailModal(gameId) {
   modal.classList.remove('hidden');
   document.body.style.overflow = 'hidden';
 
-  const game = games.find(g => g.id === gameId);
+  let game = games.find(g => g.id === gameId);
   if (!game) return;
 
   renderModalInfo(game);
   renderModalControls(game);
+
+  // Library button
+  const libBtn = $id('modal-library-btn');
+
+  function updateLibBtn() {
+    const inLib = !!game?.libraryEntry;
+    libBtn.textContent = inLib ? '— Remove from Library' : '+ Add to Library';
+    libBtn.className = 'modal-library-btn' + (inLib ? ' in-library' : '');
+  }
+
+  updateLibBtn();
+  libBtn.onclick = async () => {
+    try {
+      if (game?.libraryEntry) {
+        await api('DELETE', `/api/library/${gameId}`);
+        toast('Removed from library');
+      } else {
+        await api('PUT', `/api/library/${gameId}`, { status: 'backlog' });
+        toast('Added to library', 'success');
+      }
+      await refreshData();
+      game = games.find(g => g.id === gameId);
+      updateLibBtn();
+    } catch (err) { toast(err.message, 'error'); }
+  };
+
   await loadModalPlaytime(game);
+  await renderReviews(gameId);
 }
 
 function closeDetailModal() {
@@ -525,53 +615,102 @@ function renderModalInfo(game) {
   }
 }
 
-function renderModalControls(game) {
-  const entry = game.libraryEntry;
-  currentRating = entry?.user_rating || 0;
+function renderModalControls() {}
 
-  $id('modal-status').value = entry?.status || '';
-  $id('modal-notes').value  = entry?.notes  || '';
-  $id('modal-started-at').value   = entry?.started_at   || '';
-  $id('modal-completed-at').value = entry?.completed_at || '';
-  renderStars(currentRating);
+function renderReviewStars(container, rating) {
+  activeReviewRating = rating || 0;
 
-  $id('modal-save-btn').onclick   = saveModalEntry;
-  $id('modal-remove-btn').onclick = removeModalEntry;
-  $id('modal-remove-btn').style.display = entry ? '' : 'none';
+  container.innerHTML = Array.from({ length: 5 }, (_, i) =>
+    `<button type="button" class="star-btn" data-n="${i + 1}" style="background:none;border:none;font-size:24px;cursor:pointer;padding:0 3px;line-height:1">★</button>`
+  ).join('');
+
+  const btns = Array.from(container.querySelectorAll('.star-btn'));
+
+  function paint(val) {
+    btns.forEach((b, i) => {
+      const on = i + 1 <= val;
+      b.style.color = on ? '#d0ff00' : 'var(--border)';
+      b.style.textShadow = on ? '0 0 8px #d0ff00' : 'none';
+    });
+  }
+
+  btns.forEach(b => {
+    const n = parseInt(b.dataset.n);
+    b.addEventListener('mouseenter', () => paint(n));
+    b.addEventListener('click', () => {
+      activeReviewRating = n;
+      container.dataset.selectedRating = n;
+      paint(n);
+    });
+  });
+
+  container.addEventListener('mouseleave', () => paint(activeReviewRating));
+  container.dataset.selectedRating = activeReviewRating;
+  paint(activeReviewRating);
 }
 
-function renderStars(rating) {
-  $id('modal-rating-stars').innerHTML = Array.from({ length: 10 }, (_, i) => {
-    const n = i + 1;
-    return `<button class="star${n <= rating ? ' filled' : ''}" data-n="${n}" title="${n}/10">★</button>`;
-  }).join('');
-  $id('modal-rating-stars').querySelectorAll('.star').forEach(s => {
-    s.addEventListener('click', () => {
-      currentRating = parseInt(s.dataset.n);
-      renderStars(currentRating);
-    });
-    s.addEventListener('mouseenter', () => {
-      const n = parseInt(s.dataset.n);
-      $id('modal-rating-stars').querySelectorAll('.star').forEach((st, idx) =>
-        st.classList.toggle('filled', idx < n)
-      );
-    });
-    s.addEventListener('mouseleave', () => renderStars(currentRating));
-  });
+async function renderReviews(gameId) {
+  let reviews;
+  try {
+    reviews = await api('GET', `/api/games/${gameId}/reviews`);
+  } catch (err) {
+    toast(err.message, 'error');
+    return;
+  }
+  const list = $id('modal-reviews-list');
+  const mine = reviews.find(r => r.user_id === currentUser?.id);
+
+  // Show existing reviews
+  list.innerHTML = reviews.length ? reviews.map(r => `
+    <div class="review-item">
+      <div class="review-header">
+        <span class="review-author">${esc(r.username)}</span>
+        <span class="review-stars"><span style="color:#d0ff00;text-shadow:0 0 4px #d0ff00">${'★'.repeat(r.rating)}</span><span style="color:var(--border)">${'☆'.repeat(5 - r.rating)}</span></span>
+        <span class="review-date">${timeAgo(r.created_at)}</span>
+      </div>
+      <div class="review-body">${esc(r.body)}</div>
+    </div>`).join('') : `<p style="color:var(--text-3);font-size:12px;margin-bottom:12px">No reviews yet.</p>`;
+
+  // Pre-fill form if user already reviewed
+  renderReviewStars($id('modal-review-stars'), mine?.rating || 0);
+  if (mine) {
+    $id('modal-review-body').value = mine.body;
+    $id('modal-review-delete').classList.remove('hidden');
+    $id('modal-review-submit').textContent = 'Update Review';
+  } else {
+    $id('modal-review-body').value = '';
+    $id('modal-review-delete').classList.add('hidden');
+    $id('modal-review-submit').textContent = 'Post Review';
+  }
+
+  $id('modal-review-submit').onclick = async () => {
+    const body = $id('modal-review-body').value.trim();
+    const rating = parseInt($id('modal-review-stars').dataset.selectedRating) || 0;
+    if (!rating) return toast('Select a star rating', 'error');
+    if (!body) return toast('Write something first', 'error');
+    try {
+      await api('PUT', `/api/games/${gameId}/reviews`, { rating, body });
+      await renderReviews(gameId);
+      $id('modal-review-body').value = '';
+      renderReviewStars($id('modal-review-stars'), 0);
+      toast('Review saved', 'success');
+    } catch (err) { toast(err.message, 'error'); }
+  };
+  $id('modal-review-delete').onclick = async () => {
+    await api('DELETE', `/api/games/${gameId}/reviews`);
+    renderReviews(gameId);
+    toast('Review deleted');
+  };
 }
 
 async function saveModalEntry() {
   if (!activeGameId) return;
-  const status      = $id('modal-status').value;
-  const user_rating = currentRating || null;
-  const notes       = $id('modal-notes').value;
-  const started_at  = $id('modal-started-at').value || null;
-  const completed_at = $id('modal-completed-at').value || null;
+  const status = $id('modal-status').value;
   try {
     if (!status) {
       await api('DELETE', `/api/library/${activeGameId}`);
     } else {
-      await api('PUT', `/api/library/${activeGameId}`, { status, user_rating, notes, started_at, completed_at });
+      await api('PUT', `/api/library/${activeGameId}`, { status });
     }
     await refreshData();
     const updated = games.find(g => g.id === activeGameId);
@@ -615,9 +754,17 @@ async function loadModalPlaytime(game) {
   $id('modal-playtime-total').innerHTML =
     `${formatPlaytime(playtime.total_min)}<span>total playtime</span>`;
 
-  // Session controls
+  // Inline playtime near title
+  const inlineEl = $id('modal-playtime-inline');
+  if (inlineEl) inlineEl.innerHTML = playtime.total_min > 0
+    ? `<span class="modal-playtime-badge">⏱ ${formatPlaytime(playtime.total_min)}</span>`
+    : '';
+
+  // Session controls — top play button
   const ctrl = $id('modal-session-controls');
+  const playBtn = $id('modal-play-btn');
   if (openSession) {
+    if (playBtn) playBtn.style.display = 'none';
     ctrl.innerHTML = `
       <div class="session-active">
         <div class="session-active-dot"></div>
@@ -626,8 +773,35 @@ async function loadModalPlaytime(game) {
       </div>`;
     $id('end-session-btn').onclick = () => endActiveSession(game.id);
   } else {
-    ctrl.innerHTML = `<button class="btn btn-accent btn-sm" id="start-session-btn">Start Session</button>`;
-    $id('start-session-btn').onclick = () => startActiveSession(game.id);
+    if (playBtn) {
+      playBtn.style.display = '';
+      playBtn.onclick = async () => {
+        try {
+          if (game.rom_id) {
+            const rom = await api('GET', `/api/roms/${game.rom_id}`);
+            closeDetailModal();
+            activeEmuSystem = rom.system;
+            launchEmulator(rom.id, game.title);
+          } else {
+            // Try to auto-match by title
+            const allRoms = await api('GET', '/api/roms');
+            const needle = game.title.toLowerCase().replace(/[^a-z0-9]/g, '');
+            const match = allRoms.find(r =>
+              r.name.toLowerCase().replace(/[^a-z0-9]/g, '').includes(needle) ||
+              needle.includes(r.name.toLowerCase().replace(/[^a-z0-9]/g, ''))
+            );
+            if (match) {
+              closeDetailModal();
+              activeEmuSystem = match.system;
+              launchEmulator(match.id, game.title);
+            } else {
+              toast('No ROM linked to this game — link one in Admin', 'error');
+            }
+          }
+        } catch (err) { toast(err.message, 'error'); }
+      };
+    }
+    ctrl.innerHTML = '';
   }
 
   // Session list
@@ -639,18 +813,8 @@ async function loadModalPlaytime(game) {
         <span class="session-dur">${formatPlaytime(s.duration_min)}</span>
         <span class="session-date">${timeAgo(s.started_at)}</span>
         ${s.notes ? `<span class="session-note">${esc(s.notes)}</span>` : ''}
-        <button class="session-del" data-sid="${s.id}" title="Delete">×</button>
       </div>`
     ).join('');
-
-  $id('modal-session-list').querySelectorAll('.session-del').forEach(btn => {
-    btn.addEventListener('click', async () => {
-      try {
-        await api('DELETE', `/api/games/${game.id}/sessions/${btn.dataset.sid}`);
-        await loadModalPlaytime(game);
-      } catch (err) { toast(err.message, 'error'); }
-    });
-  });
 
   // Manual session form
   $id('modal-add-session-btn').onclick = () =>
@@ -777,6 +941,11 @@ function renderGameForm(gameId) {
 
   $id('admin-game-form').innerHTML = `
     <h3 style="margin-bottom:20px;font-size:16px">${game ? 'Edit' : 'Add'} Game</h3>
+    ${!game ? `<div style="display:flex;gap:8px;margin-bottom:20px">
+      <input id="gf-rawg-search" placeholder="Search RAWG to auto-fill…" style="flex:1" />
+      <button class="btn btn-ghost" id="gf-rawg-btn">Search</button>
+    </div>
+    <div id="gf-rawg-results" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px"></div>` : ''}
     <div class="form-row-two">
       <div class="field-wrap"><label>Title *</label><input id="gf-title" value="${v('title')}" /></div>
       <div class="field-wrap"><label>Developer</label><input id="gf-dev" value="${v('developer')}" /></div>
@@ -807,6 +976,9 @@ function renderGameForm(gameId) {
       <div class="field-wrap"><label>Metacritic (0–100)</label><input id="gf-mc" type="number" min="0" max="100" value="${game?.metacritic || ''}" /></div>
       <div class="field-wrap"><label>Trailer URL (YouTube)</label><input id="gf-trailer" value="${v('trailer_url')}" placeholder="https://youtube.com/…" /></div>
     </div>
+    <div class="field-wrap"><label>Linked ROM (for Play button)</label>
+      <select id="gf-rom"><option value="">— None —</option></select>
+    </div>
     <div style="display:flex;gap:10px;margin-top:20px">
       <button class="btn btn-accent" id="gf-save">${game ? 'Save Changes' : 'Add Game'}</button>
       ${game ? '<button class="btn btn-ghost" id="gf-cancel">Cancel</button>' : ''}
@@ -815,6 +987,53 @@ function renderGameForm(gameId) {
 
   $id('gf-save').onclick = saveGameForm;
   if ($id('gf-cancel')) $id('gf-cancel').onclick = () => switchAdminTab('catalog');
+
+  // Populate ROM selector
+  api('GET', '/api/roms').then(roms => {
+    const sel = $id('gf-rom');
+    if (!sel) return;
+    roms.forEach(r => {
+      const opt = document.createElement('option');
+      opt.value = r.id;
+      opt.textContent = `${r.name} (${r.system})`;
+      if (r.id === game?.rom_id) opt.selected = true;
+      sel.appendChild(opt);
+    });
+  }).catch(() => {});
+
+  if (!game) {
+    const doSearch = async () => {
+      const q = $id('gf-rawg-search').value.trim();
+      if (!q) return;
+      const results = await api('GET', `/api/rawg/search?q=${encodeURIComponent(q)}`);
+      $id('gf-rawg-results').innerHTML = results.map(r => `
+        <button class="btn btn-ghost btn-sm rawg-result" data-slug="${r.slug}" style="display:flex;align-items:center;gap:6px">
+          ${r.cover ? `<img src="${esc(r.cover)}" style="width:28px;height:40px;object-fit:cover;border-radius:3px">` : ''}
+          <span>${esc(r.name)}${r.year ? ` <small style="color:var(--text-3)">(${r.year})</small>` : ''}</span>
+        </button>`).join('');
+      $id('gf-rawg-results').querySelectorAll('.rawg-result').forEach(btn => {
+        btn.onclick = async () => {
+          const detail = await api('GET', `/api/rawg/game/${btn.dataset.slug}`);
+          $id('gf-title').value    = detail.title || '';
+          $id('gf-dev').value      = detail.developer || '';
+          $id('gf-pub').value      = detail.publisher || '';
+          $id('gf-year').value     = detail.release_year || '';
+          $id('gf-desc').value     = detail.description || '';
+          $id('gf-cover').value    = detail.cover_url || '';
+          $id('gf-genres').value   = (detail.genres || []).join(', ');
+          $id('gf-platforms').value= (detail.platforms || []).join(', ');
+          $id('gf-mc').value       = detail.metacritic || '';
+          const esrb = $id('gf-esrb');
+          if (detail.rating_esrb) esrb.value = detail.rating_esrb;
+          $id('gf-rawg-results').innerHTML = '';
+          $id('gf-rawg-search').value = '';
+          toast('Details filled from RAWG', 'success');
+        };
+      });
+    };
+    $id('gf-rawg-btn').onclick = doSearch;
+    $id('gf-rawg-search').addEventListener('keydown', e => { if (e.key === 'Enter') doSearch(); });
+  }
 }
 
 function parseCSV(str) {
@@ -839,6 +1058,7 @@ async function saveGameForm() {
     rating_esrb:  $id('gf-esrb').value || null,
     metacritic:   parseInt($id('gf-mc').value) || null,
     trailer_url:  $id('gf-trailer').value.trim() || null,
+    rom_id:       $id('gf-rom').value || null,
   };
   try {
     if (editingGameId) {
@@ -920,14 +1140,23 @@ function setupEvents() {
     if (e.key === 'Enter' && activeView !== 'search') switchView('search');
   });
 
-  // User dropdown
+  // User dropdown — open on click, close on mouseleave (with delay to bridge gap)
+  let _ddCloseTimer;
+  const _ddWrap = $id('user-avatar-wrap');
+  const _dd = $id('user-dropdown');
+  const _ddOpen  = () => { clearTimeout(_ddCloseTimer); };
+  const _ddClose = () => { _ddCloseTimer = setTimeout(() => _dd.classList.add('hidden'), 150); };
+
   $id('user-avatar-btn').addEventListener('click', e => {
     e.stopPropagation();
-    $id('user-dropdown').classList.toggle('hidden');
+    _dd.classList.toggle('hidden');
   });
+  _ddWrap.addEventListener('mouseleave', _ddClose);
+  _ddWrap.addEventListener('mouseenter', _ddOpen);
+  _dd.addEventListener('mouseenter', _ddOpen);
+  _dd.addEventListener('mouseleave', _ddClose);
   document.addEventListener('click', e => {
-    if (!$id('user-avatar-wrap').contains(e.target))
-      $id('user-dropdown').classList.add('hidden');
+    if (!_ddWrap.contains(e.target)) _dd.classList.add('hidden');
   });
 
   // Theme buttons
@@ -1010,13 +1239,13 @@ function setupEvents() {
 // ── Emulators ─────────────────────────────────────────────────────────────────
 
 const EMULATOR_SYSTEMS = [
-  { id: 'nes',    name: 'NES',            color: '#E8E8E8', logo: 'img/systems/nes.svg' },
-  { id: 'snes',   name: 'Super Nintendo', color: '#5B4F9E' },
-  { id: 'n64',    name: 'Nintendo 64',    color: '#E8823A' },
-  { id: 'gba',    name: 'Game Boy / GBA', color: '#4CAF82' },
-  { id: 'psx',    name: 'PlayStation',    color: '#00439C' },
-  { id: 'segaMD', name: 'Sega Genesis',   color: '#1A1A2E' },
-  { id: 'nds',    name: 'Nintendo DS',    color: '#D4A017' },
+  { id: 'nes',    name: 'NES',            color: '#E8E8E8', logo: 'img/systems/nes.svg', neon: '#00d8ff' },
+  { id: 'snes',   name: 'Super Nintendo', color: '#5B4F9E', neon: '#d0ff00' },
+  { id: 'n64',    name: 'Nintendo 64',    color: '#E8823A', neon: '#ff00e1' },
+  { id: 'gba',    name: 'Game Boy / GBA', color: '#4CAF82', neon: '#00ff18' },
+  { id: 'psx',    name: 'PlayStation',    color: '#00439C', neon: '#ff0000' },
+  { id: 'segaMD', name: 'Sega Genesis',   color: '#1A1A2E', neon: '#bf00ff' },
+  { id: 'nds',    name: 'Nintendo DS',    color: '#D4A017', neon: '#ff6a00' },
 ];
 
 let activeEmuSystem = null;
@@ -1035,7 +1264,7 @@ async function renderEmulators() {
     // System selection grid
     content.innerHTML = `<div class="emu-systems-grid">${
       EMULATOR_SYSTEMS.map(s => `
-        <button class="emu-system-card" data-system="${s.id}">
+        <button class="emu-system-card" data-system="${s.id}" style="--card-neon:${s.neon}">
           <div class="emu-system-icon" style="background:${s.color}">
             ${s.logo
               ? `<img src="${esc(s.logo)}" alt="${esc(s.name)}" style="width:80%;height:80%;object-fit:contain;">`
@@ -1045,7 +1274,7 @@ async function renderEmulators() {
                 </svg>`
             }
           </div>
-          <div class="emu-system-name">${esc(s.name)}</div>
+          <div class="emu-system-name" style="color:#fff;text-shadow:0 0 4px #fff,0 0 10px ${s.neon},0 0 24px ${s.neon},0 0 48px ${s.neon}88;">${esc(s.name)}</div>
           <div class="emu-system-count" id="emu-count-${s.id}">—</div>
         </button>`
       ).join('')
@@ -1160,7 +1389,10 @@ function closeEmulator() {
   overlay.classList.add('hidden');
   $id('emulator-frame').src = '';
   document.body.style.overflow = '';
+  activeEmuSystem = null;
+  renderEmulators();
 }
+window.closeEmulator = closeEmulator;
 
 // ── Hosted Servers ────────────────────────────────────────────────────────────
 
@@ -1271,7 +1503,7 @@ async function renderHosted() {
   }
 }
 
-function renderCfgPanel(id, cfg) {
+function renderCfgPanel(_id, cfg) {
   const val = k => esc(cfg[k] ?? '');
   const tog = (k, label) => `
     <label class="cfg-toggle-row">
