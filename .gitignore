@@ -2,3 +2,4 @@ node_modules/
 games.db
 *.db-shm
 *.db-wal
+roms/
