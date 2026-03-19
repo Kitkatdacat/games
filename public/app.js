@@ -1879,7 +1879,8 @@ async function uploadRom() {
 }
 
 function launchEmulator(romId, romName) {
-  const url = `/emulator.html?core=${encodeURIComponent(activeEmuSystem)}&rom=${encodeURIComponent(`/api/roms/${romId}/file`)}`;
+  const romUrl = window.location.origin + `/api/roms/${romId}/file`;
+  const url = `/emulator.html?core=${encodeURIComponent(activeEmuSystem)}&rom=${encodeURIComponent(romUrl)}`;
   $id('emulator-title').textContent = romName || 'Emulator';
   $id('emulator-frame').src = url;
   $id('emulator-overlay').classList.remove('hidden');
