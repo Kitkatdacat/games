@@ -42,6 +42,7 @@
   </div>
   <script>
     const params = new URLSearchParams(window.location.search);
+    const backUrl = params.get('back') || '/';
     window.EJS_player        = '#game';
     window.EJS_core          = params.get('core') || 'nes';
     window.EJS_gameUrl       = params.get('rom');
@@ -64,7 +65,7 @@
       saveSavFiles:  { visible: false },
       loadSavFiles:  { visible: false },
       fullscreen:    { visible: true },
-      exitEmulation: { visible: true, callback: () => window.parent.closeEmulator() },
+      exitEmulation: { visible: true, callback: () => { window.location.href = backUrl; } },
       settings:      { visible: true },
     };
 
