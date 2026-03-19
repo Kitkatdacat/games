@@ -212,12 +212,14 @@ html, body {
 #nav-search    { --nav-neon: #ff00e1; }
 #nav-emulators { --nav-neon: #00ff18; }
 #nav-hosted    { --nav-neon: #ff0000; }
+#nav-controls  { --nav-neon: #bf00ff; }
 
 #nav-home.nav-item--active,
 #nav-library.nav-item--active,
 #nav-search.nav-item--active,
 #nav-emulators.nav-item--active,
-#nav-hosted.nav-item--active {
+#nav-hosted.nav-item--active,
+#nav-controls.nav-item--active {
   border-left-color: var(--nav-neon);
   background: var(--nav-neon);
   color: #000;
@@ -228,7 +230,8 @@ html, body {
 #nav-library.nav-item--active .nav-icon,
 #nav-search.nav-item--active .nav-icon,
 #nav-emulators.nav-item--active .nav-icon,
-#nav-hosted.nav-item--active .nav-icon {
+#nav-hosted.nav-item--active .nav-icon,
+#nav-controls.nav-item--active .nav-icon {
   color: #000;
   filter: none;
 }
@@ -236,7 +239,8 @@ html, body {
 #nav-sidebar:hover #nav-library.nav-item--active,
 #nav-sidebar:hover #nav-search.nav-item--active,
 #nav-sidebar:hover #nav-emulators.nav-item--active,
-#nav-sidebar:hover #nav-hosted.nav-item--active {
+#nav-sidebar:hover #nav-hosted.nav-item--active,
+#nav-sidebar:hover #nav-controls.nav-item--active {
   background: transparent;
   color: var(--nav-neon);
   text-shadow: 0 0 6px var(--nav-neon);
@@ -246,7 +250,8 @@ html, body {
 #nav-sidebar:hover #nav-library.nav-item--active .nav-icon,
 #nav-sidebar:hover #nav-search.nav-item--active .nav-icon,
 #nav-sidebar:hover #nav-emulators.nav-item--active .nav-icon,
-#nav-sidebar:hover #nav-hosted.nav-item--active .nav-icon {
+#nav-sidebar:hover #nav-hosted.nav-item--active .nav-icon,
+#nav-sidebar:hover #nav-controls.nav-item--active .nav-icon {
   color: var(--nav-neon);
   filter: drop-shadow(0 0 4px var(--nav-neon));
 }
@@ -254,14 +259,16 @@ html, body {
 #nav-library:hover,
 #nav-search:hover,
 #nav-emulators:hover,
-#nav-hosted:hover {
+#nav-hosted:hover,
+#nav-controls:hover {
   color: var(--nav-neon);
 }
 #nav-home:hover .nav-icon,
 #nav-library:hover .nav-icon,
 #nav-search:hover .nav-icon,
 #nav-emulators:hover .nav-icon,
-#nav-hosted:hover .nav-icon {
+#nav-hosted:hover .nav-icon,
+#nav-controls:hover .nav-icon {
   color: var(--nav-neon);
 }
 .nav-icon { width: 28px; height: 28px; flex-shrink: 0; color: var(--nav-neon, var(--text-2)); filter: drop-shadow(0 0 3px var(--nav-neon, transparent)); }
@@ -372,7 +379,8 @@ html, body {
 .view[data-view="search"] .view-title,
 .view[data-view="library"] .view-title,
 .view[data-view="emulators"] .view-title,
-.view[data-view="hosted"] .view-title { font-size: clamp(36px, 5vw, 72px); }
+.view[data-view="hosted"] .view-title,
+.view[data-view="controls"] .view-title { font-size: clamp(36px, 5vw, 72px); }
 .neon-letter {
   color: var(--nl); text-shadow: 0 0 10px var(--nl);
   transition: text-shadow 150ms ease, opacity 150ms ease; cursor: default;
@@ -490,12 +498,45 @@ html, body {
 .view[data-view="search"],
 .view[data-view="library"],
 .view[data-view="emulators"],
-.view[data-view="hosted"] { background: #000; }
+.view[data-view="hosted"],
+.view[data-view="controls"] { background: #000; }
 .view[data-view="home"] .view-inner,
 .view[data-view="search"] .view-inner,
 .view[data-view="library"] .view-inner,
 .view[data-view="emulators"] .view-inner,
-.view[data-view="hosted"] .view-inner { max-width: 100%; }
+.view[data-view="hosted"] .view-inner,
+.view[data-view="controls"] .view-inner { max-width: 100%; }
+
+/* ── Controller Config ───────────────────────────────────────────────────── */
+.ctrl-tabs { display: flex; flex-wrap: wrap; gap: 8px; padding: 0 48px 24px; }
+.ctrl-tab {
+  background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.1);
+  color: var(--text-2); font: 600 12px/1 var(--font); letter-spacing: .07em;
+  text-transform: uppercase; padding: 7px 16px; border-radius: 20px;
+  cursor: pointer; transition: all 150ms ease;
+}
+.ctrl-tab:hover { border-color: var(--ct); color: var(--ct); box-shadow: 0 0 8px color-mix(in srgb, var(--ct) 40%, transparent); }
+.ctrl-tab--active { border-color: var(--ct); color: var(--ct); background: color-mix(in srgb, var(--ct) 12%, transparent); box-shadow: 0 0 12px color-mix(in srgb, var(--ct) 30%, transparent); }
+.ctrl-diagram { padding: 0 48px; }
+.ctrl-slot { transition: opacity 150ms; }
+.ctrl-slot:hover rect, .ctrl-slot:hover circle { filter: drop-shadow(0 0 4px currentColor); }
+.ds-btn-g { transition: opacity 120ms; }
+.ds-btn-g:hover > rect, .ds-btn-g:hover > circle { opacity: 0.85; filter: drop-shadow(0 0 5px currentColor); }
+.ds-active { transition: fill 80ms, filter 80ms; }
+.ctrl-hint { text-align: center; color: var(--text-3); font-size: 12px; margin-top: 12px; letter-spacing: .05em; }
+.ctrl-actions { display: flex; justify-content: center; gap: 12px; margin-top: 20px; padding-bottom: 48px; }
+.ctrl-capture-overlay {
+  position: fixed; inset: 0; background: rgba(0,0,0,0.88);
+  z-index: 10000; display: flex; align-items: center; justify-content: center;
+}
+.ctrl-capture-box {
+  background: #111; border: 1px solid; border-radius: 14px;
+  padding: 40px 56px; text-align: center; min-width: 260px;
+  box-shadow: 0 0 48px color-mix(in srgb, currentColor 20%, transparent);
+}
+.ctrl-capture-label { font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: .1em; margin-bottom: 10px; }
+.ctrl-capture-hint { font-size: 20px; color: #fff; margin-bottom: 24px; }
+.ctrl-capture-cancel { margin-top: 4px; }
 .shelf { margin-top: 32px; position: relative; }
 .shelf-header {
   display: flex; align-items: center; justify-content: space-between;

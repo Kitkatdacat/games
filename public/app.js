@@ -128,6 +128,8 @@ async function loadApp() {
 
   if (currentUser.role === 'admin') {
     $id('dd-admin').classList.remove('hidden');
+  } else {
+    $id('nav-controls').classList.add('hidden');
   }
 
   await refreshData();
@@ -254,6 +256,7 @@ async function switchView(name) {
     n.classList.toggle('nav-item--active', n.dataset.view === name);
   });
   await refreshData();
+  if (name !== 'controls')  stopGamepadPoll();
   if (name === 'home')      renderHome();
   if (name === 'library')   renderLibrary();
   if (name === 'search')    renderSearch();
@@ -261,6 +264,7 @@ async function switchView(name) {
   if (name === 'hosted')    { renderHosted(); startHostedPoll(); }
   if (name !== 'hosted')    stopHostedPoll();
   if (name === 'emulators') { activeEmuSystem = null; renderEmulators(); }
+  if (name === 'controls')  renderControls();
 }
 
 // ── Hero Banner ───────────────────────────────────────────────────────────────
@@ -697,7 +701,7 @@ function renderReviewStars(container, rating) {
   function paint(val) {
     btns.forEach((b, i) => {
       const on = i + 1 <= val;
-      b.style.color = on ? '#d0ff00' : 'var(--border)';
+      b.style.color = on ? '#d0ff00' : 'rgba(255,255,255,0.5)';
       b.style.textShadow = on ? '0 0 8px #d0ff00' : 'none';
     });
   }
@@ -733,7 +737,7 @@ async function renderReviews(gameId) {
     <div class="review-item">
       <div class="review-header">
         <span class="review-author">${esc(r.username)}</span>
-        <span class="review-stars"><span style="color:#d0ff00;text-shadow:0 0 4px #d0ff00">${'★'.repeat(r.rating)}</span><span style="color:var(--border)">${'☆'.repeat(5 - r.rating)}</span></span>
+        <span class="review-stars"><span style="color:#d0ff00;text-shadow:0 0 4px #d0ff00">${'★'.repeat(r.rating)}</span><span style="color:rgba(255,255,255,0.5)">${'☆'.repeat(5 - r.rating)}</span></span>
         <span class="review-date">${timeAgo(r.created_at)}</span>
       </div>
       <div class="review-body">${esc(r.body)}</div>
@@ -884,23 +888,28 @@ async function loadModalPlaytime(game) {
       </div>`
     ).join('');
 
-  // Manual session form
-  $id('modal-add-session-btn').onclick = () =>
-    $id('modal-manual-session').classList.toggle('hidden');
-  $id('ms-save-btn').onclick = async () => {
-    const start = $id('ms-start').value;
-    const end   = $id('ms-end').value;
-    if (!start || !end) { toast('Fill in start and end times', 'error'); return; }
-    const dur = Math.max(0, Math.floor((new Date(end) - new Date(start)) / 60000));
-    const notes = $id('ms-notes').value;
-    try {
-      await api('POST', `/api/games/${game.id}/sessions`, { started_at: new Date(start).toISOString(), ended_at: new Date(end).toISOString(), duration_min: dur, notes });
-      $id('modal-manual-session').classList.add('hidden');
-      $id('ms-start').value = ''; $id('ms-end').value = ''; $id('ms-notes').value = '';
-      await loadModalPlaytime(game);
-      toast('Session added', 'success');
-    } catch (err) { toast(err.message, 'error'); }
-  };
+  // Manual session form (optional — elements may not be present)
+  const addSessionBtn = $id('modal-add-session-btn');
+  const saveSessionBtn = $id('ms-save-btn');
+  if (addSessionBtn) {
+    addSessionBtn.onclick = () => $id('modal-manual-session')?.classList.toggle('hidden');
+  }
+  if (saveSessionBtn) {
+    saveSessionBtn.onclick = async () => {
+      const start = $id('ms-start').value;
+      const end   = $id('ms-end').value;
+      if (!start || !end) { toast('Fill in start and end times', 'error'); return; }
+      const dur = Math.max(0, Math.floor((new Date(end) - new Date(start)) / 60000));
+      const notes = $id('ms-notes').value;
+      try {
+        await api('POST', `/api/games/${game.id}/sessions`, { started_at: new Date(start).toISOString(), ended_at: new Date(end).toISOString(), duration_min: dur, notes });
+        $id('modal-manual-session')?.classList.add('hidden');
+        $id('ms-start').value = ''; $id('ms-end').value = ''; $id('ms-notes').value = '';
+        await loadModalPlaytime(game);
+        toast('Session added', 'success');
+      } catch (err) { toast(err.message, 'error'); }
+    };
+  }
 }
 
 async function startActiveSession(gameId) {
@@ -1669,8 +1678,6 @@ function setupEvents() {
 
   // Leave to Hub / Admin
   $id('dd-leave').addEventListener('click', () => {
-    api('POST', '/api/auth/logout').catch(() => {});
-    localStorage.removeItem('tkn_games');
     window.location.href = getHubUrl();
   });
   $id('dd-admin').addEventListener('click', () => {
@@ -1958,21 +1965,11 @@ async function renderHosted() {
             <img src="img/servers/${s.online ? 'power-on' : 'power-off'}.svg" alt="${s.online ? 'Stop' : 'Start'}">
             <span>${s.online ? 'Running' : 'Stopped'}</span>
           </button>
-          ` : `
-          <div class="server-power-display">
-            <img src="img/servers/${s.online ? 'power-on' : 'power-off'}.svg" alt="">
-          </div>
-          `}
-          ${isAdmin && s.config_path ? `
-          <button class="server-tile-cfg-btn" data-id="${esc(s.id)}">⚙ Settings</button>
+          <button class="server-tile-cfg-btn" data-id="${esc(s.id)}" style="${s.config_path ? '' : 'display:none'}">⚙ Settings</button>
           ` : ''}
         </div>
       </div>
-      ${isAdmin && s.config_path ? `
-      <div class="server-tile-cfg hidden" data-cfg-id="${esc(s.id)}">
-        <div class="server-cfg-loading">Loading settings…</div>
-      </div>
-      ` : ''}
+      ${isAdmin && s.config_path ? `<div class="server-tile-cfg hidden" data-cfg-id="${esc(s.id)}"><div class="server-cfg-loading">Loading settings…</div></div>` : ''}
     </div>
   `).join('');
 
@@ -2119,6 +2116,340 @@ async function renderAdminHosted() {
       renderAdminHosted();
     });
   });
+}
+
+// ── Controller Config ─────────────────────────────────────────────────────────
+
+// DualSense button index → SVG element ID + display label
+const DS_BUTTONS = [
+  { id: 'ds-cross',    label: '✕',    color: '#7fa7e0' }, // 0
+  { id: 'ds-circle',   label: '○',    color: '#f0566c' }, // 1
+  { id: 'ds-square',   label: '□',    color: '#e8a0c8' }, // 2
+  { id: 'ds-triangle', label: '△',    color: '#5ce5a0' }, // 3
+  { id: 'ds-l1',       label: 'L1',   color: null },      // 4
+  { id: 'ds-r1',       label: 'R1',   color: null },      // 5
+  { id: 'ds-l2',       label: 'L2',   color: null },      // 6
+  { id: 'ds-r2',       label: 'R2',   color: null },      // 7
+  { id: 'ds-create',   label: 'Cre',  color: null },      // 8
+  { id: 'ds-options',  label: 'Opt',  color: null },      // 9
+  { id: 'ds-lstick',   label: 'L3',   color: null },      // 10
+  { id: 'ds-rstick',   label: 'R3',   color: null },      // 11
+  { id: 'ds-up',       label: '↑',    color: null },      // 12
+  { id: 'ds-down',     label: '↓',    color: null },      // 13
+  { id: 'ds-left',     label: '←',    color: null },      // 14
+  { id: 'ds-right',    label: '→',    color: null },      // 15
+  { id: 'ds-ps',       label: 'PS',   color: null },      // 16
+  { id: 'ds-touchpad', label: 'TP',   color: null },      // 17
+];
+
+// Default gamepad button index → game action per system (DualSense standard mapping)
+const DS_SYSTEM_MAP = {
+  nes:    { 0:'B', 1:'A', 8:'Select', 9:'Start', 12:'↑', 13:'↓', 14:'←', 15:'→' },
+  snes:   { 0:'B', 1:'A', 2:'Y', 3:'X', 4:'L', 5:'R', 8:'Select', 9:'Start', 12:'↑', 13:'↓', 14:'←', 15:'→' },
+  n64:    { 0:'B', 1:'A', 4:'L', 5:'R', 6:'Z', 9:'Start', 12:'↑', 13:'↓', 14:'←', 15:'→' },
+  gba:    { 0:'B', 1:'A', 4:'L', 5:'R', 8:'Select', 9:'Start', 12:'↑', 13:'↓', 14:'←', 15:'→' },
+  psx:    { 0:'✕', 1:'○', 2:'□', 3:'△', 4:'L1', 5:'R1', 6:'L2', 7:'R2', 8:'Select', 9:'Start', 12:'↑', 13:'↓', 14:'←', 15:'→' },
+  segaMD: { 0:'B', 1:'C', 2:'A', 9:'Start', 12:'↑', 13:'↓', 14:'←', 15:'→' },
+  nds:    { 0:'B', 1:'A', 2:'Y', 3:'X', 4:'L', 5:'R', 8:'Select', 9:'Start', 12:'↑', 13:'↓', 14:'←', 15:'→' },
+};
+
+let activeCtrlSystem = null;
+let gpPollId = null;
+
+function keyLabel(k) {
+  if (!k) return '?';
+  if (k.startsWith('GP:')) {
+    const i = parseInt(k.slice(3));
+    return DS_BUTTONS[i]?.label ?? `B${i}`;
+  }
+  const m = {
+    ArrowUp: '↑', ArrowDown: '↓', ArrowLeft: '←', ArrowRight: '→',
+    Enter: 'Ent', Escape: 'Esc', Backspace: 'Bksp',
+    ' ': 'Spc', Space: 'Spc', Shift: 'Shft', Control: 'Ctrl', Alt: 'Alt', Tab: 'Tab',
+  };
+  if (m[k]) return m[k];
+  if (k.startsWith('F') && k.length <= 3) return k;
+  if (k.length === 1) return k.toUpperCase();
+  return k.slice(0, 4);
+}
+
+function loadCtrlConfig() {
+  try { return JSON.parse(localStorage.getItem('ctrl_config') || '{}'); } catch { return {}; }
+}
+function saveCtrlConfig(cfg) { localStorage.setItem('ctrl_config', JSON.stringify(cfg)); }
+function resetBindings(systemId) {
+  const cfg = loadCtrlConfig(); delete cfg[systemId]; saveCtrlConfig(cfg);
+}
+
+async function captureInput(neon, btnLabel) {
+  return new Promise(resolve => {
+    stopGamepadPoll();
+    const overlay = document.createElement('div');
+    overlay.className = 'ctrl-capture-overlay';
+    overlay.innerHTML = `
+      <div class="ctrl-capture-box" style="border-color:${neon};color:${neon}">
+        <div class="ctrl-capture-label">${esc(btnLabel)}</div>
+        <div class="ctrl-capture-hint">Press any key or controller button…</div>
+        <button class="btn btn-sm ctrl-capture-cancel">Cancel</button>
+      </div>`;
+    document.body.appendChild(overlay);
+
+    let done = false;
+    const finish = result => {
+      if (done) return; done = true;
+      clearInterval(gpPoll);
+      window.removeEventListener('keydown', onKey, true);
+      overlay.remove();
+      startGamepadPoll();
+      resolve(result);
+    };
+
+    overlay.querySelector('.ctrl-capture-cancel').onclick = () => finish(null);
+
+    const onKey = e => {
+      if (e.key === 'Tab') return;
+      e.preventDefault(); e.stopPropagation();
+      finish(e.key);
+    };
+    window.addEventListener('keydown', onKey, true);
+
+    const gpPoll = setInterval(() => {
+      const gps = navigator.getGamepads ? navigator.getGamepads() : [];
+      for (const gp of gps) {
+        if (!gp) continue;
+        for (let i = 0; i < gp.buttons.length; i++) {
+          if (gp.buttons[i].pressed) { finish(`GP:${i}`); return; }
+        }
+      }
+    }, 50);
+  });
+}
+
+function buildDualSenseSVG(systemId) {
+  const neon = EMULATOR_SYSTEMS.find(s => s.id === systemId)?.neon || '#00d8ff';
+  const cfg   = loadCtrlConfig()[systemId] || {};
+  const sysMap = DS_SYSTEM_MAP[systemId] || {};
+
+  // Build per-button SVG element
+  function btn(id, shape, cx, cy, label, btnColor, action) {
+    const fill   = btnColor ? `${btnColor}30` : `${neon}1a`;
+    const stroke = btnColor || neon;
+    const shapeEl = shape === 'circle'
+      ? `<circle id="${id}" class="ds-btn" cx="${cx}" cy="${cy}" r="${shape === 'circle' ? arguments[6+1] || 12 : 12}" fill="${fill}" stroke="${stroke}" stroke-width="1.3"/>`
+      : shape; // raw svg string
+    return shapeEl;
+  }
+
+  // Each interactive button group
+  function mkBtn(id, shapeStr, cx, cy, dsLabel, btnColor, actionLabel) {
+    const fill   = btnColor ? `${btnColor}30` : `${neon}1a`;
+    const stroke = btnColor || neon;
+    const mapping = cfg[id]; // custom remap stored by ds-id
+    const mapDisplay = mapping ? keyLabel(mapping) : '';
+    return `<g class="ds-btn-g" data-id="${id}" data-label="${esc(dsLabel)}" style="cursor:pointer">
+      ${shapeStr.replace('FILL', fill).replace('STROKE', stroke)}
+      <text text-anchor="middle" dominant-baseline="middle" font-family="monospace,sans-serif" style="pointer-events:none"
+        x="${cx}" y="${cy - (actionLabel ? 3 : 0)}" fill="${btnColor || neon}" font-size="6" font-weight="700">${esc(dsLabel)}</text>
+      ${actionLabel ? `<text text-anchor="middle" dominant-baseline="middle" font-family="monospace,sans-serif" style="pointer-events:none"
+        x="${cx}" y="${cy + 5}" fill="rgba(255,255,255,0.5)" font-size="4.5">${esc(actionLabel)}</text>` : ''}
+    </g>`;
+  }
+
+  function mkRect(id, x, y, w, h, rx, dsLabel, btnColor, action) {
+    const shape = `<rect id="${id}" x="${x}" y="${y}" width="${w}" height="${h}" rx="${rx}" fill="FILL" stroke="STROKE" stroke-width="1.3"/>`;
+    return mkBtn(id, shape, x + w/2, y + h/2, dsLabel, btnColor, action);
+  }
+  function mkCircle(id, cx, cy, r, dsLabel, btnColor, action) {
+    const shape = `<circle id="${id}" cx="${cx}" cy="${cy}" r="${r}" fill="FILL" stroke="STROKE" stroke-width="1.3"/>`;
+    return mkBtn(id, shape, cx, cy, dsLabel, btnColor, action);
+  }
+
+  return `<svg viewBox="0 0 560 310" xmlns="http://www.w3.org/2000/svg" id="ctrl-svg"
+      style="width:100%;max-width:640px;display:block;margin:0 auto;user-select:none">
+    <defs>
+      <filter id="ds-glow" x="-40%" y="-40%" width="180%" height="180%">
+        <feGaussianBlur stdDeviation="4" result="b"/>
+        <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+      </filter>
+      <filter id="ds-btn-glow" x="-60%" y="-60%" width="220%" height="220%">
+        <feGaussianBlur stdDeviation="5" result="b"/>
+        <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+      </filter>
+    </defs>
+
+    <!-- Controller body -->
+    <path d="M 158 22 Q 118 16 88 36 Q 58 54 48 88 Q 38 124 44 168
+             Q 52 214 76 252 Q 100 287 144 292 Q 184 297 200 276
+             Q 214 258 216 236 L 344 236
+             Q 346 258 360 276 Q 376 297 416 292
+             Q 460 287 484 252 Q 508 214 516 168
+             Q 522 128 512 88 Q 502 54 472 36
+             Q 442 16 402 22 Q 378 6 280 3 Q 182 6 158 22 Z"
+          fill="#0d0d0d" stroke="${neon}" stroke-width="1.5" opacity="0.95" filter="url(#ds-glow)"/>
+
+    <!-- Touchpad -->
+    <g class="ds-btn-g" data-id="ds-touchpad" data-label="TP" style="cursor:pointer">
+      <rect id="ds-touchpad" x="208" y="70" width="144" height="82" rx="10"
+            fill="${neon}12" stroke="${neon}55" stroke-width="1.2"/>
+      <text x="280" y="111" text-anchor="middle" dominant-baseline="middle"
+            fill="${neon}66" font-size="8" font-family="monospace,sans-serif" style="pointer-events:none">TOUCHPAD</text>
+      ${sysMap[17] ? `<text x="280" y="124" text-anchor="middle" dominant-baseline="middle" fill="rgba(255,255,255,0.35)" font-size="6" font-family="monospace,sans-serif" style="pointer-events:none">${esc(sysMap[17])}</text>` : ''}
+    </g>
+
+    <!-- L2 trigger -->
+    ${mkRect('ds-l2', 34, 10, 90, 46, 14, 'L2', null, sysMap[6])}
+    <!-- R2 trigger -->
+    ${mkRect('ds-r2', 436, 10, 90, 46, 14, 'R2', null, sysMap[7])}
+    <!-- L1 shoulder -->
+    ${mkRect('ds-l1', 40, 62, 84, 18, 6, 'L1', null, sysMap[4])}
+    <!-- R1 shoulder -->
+    ${mkRect('ds-r1', 436, 62, 84, 18, 6, 'R1', null, sysMap[5])}
+
+    <!-- D-pad cross background -->
+    <rect x="104" y="84" width="14" height="46" rx="3" fill="${neon}08" stroke="${neon}22" stroke-width="1" style="pointer-events:none"/>
+    <rect x="80" y="100" width="62" height="14" rx="3" fill="${neon}08" stroke="${neon}22" stroke-width="1" style="pointer-events:none"/>
+    <!-- D-pad buttons — accurate DualSense layout, center (111,107) -->
+    ${mkRect('ds-up',    104, 84,  14, 16, 3, '↑', null, sysMap[12])}
+    ${mkRect('ds-down',  104, 114, 14, 16, 3, '↓', null, sysMap[13])}
+    ${mkRect('ds-left',  80,  100, 16, 14, 3, '←', null, sysMap[14])}
+    ${mkRect('ds-right', 126, 100, 16, 14, 3, '→', null, sysMap[15])}
+
+    <!-- Face buttons — accurate PS5 diamond (ref: ps5-switch.svg viewport coords scaled 0.778) -->
+    ${mkCircle('ds-triangle', 448,  62, 18, '△', '#5ce5a0', sysMap[3])}
+    ${mkCircle('ds-circle',   488, 102, 18, '○', '#f0566c', sysMap[1])}
+    ${mkCircle('ds-cross',    448, 141, 18, '✕', '#7fa7e0', sysMap[0])}
+    ${mkCircle('ds-square',   408, 102, 18, '□', '#e8a0c8', sysMap[2])}
+
+    <!-- Left stick — accurate position, outer r=37 -->
+    <circle id="ds-lstick" class="ds-btn-g" data-id="ds-lstick" data-label="L3"
+            cx="193" cy="196" r="37" fill="${neon}10" stroke="${neon}55" stroke-width="1.3" style="cursor:pointer"/>
+    <circle id="ds-lstick-dot" cx="193" cy="196" r="14"
+            fill="${neon}20" stroke="${neon}88" stroke-width="1" style="pointer-events:none"/>
+    <text x="193" y="196" text-anchor="middle" dominant-baseline="middle"
+          fill="${neon}88" font-size="7" font-family="monospace,sans-serif" style="pointer-events:none">L3</text>
+
+    <!-- Right stick — accurate position -->
+    <circle id="ds-rstick" class="ds-btn-g" data-id="ds-rstick" data-label="R3"
+            cx="367" cy="196" r="37" fill="${neon}10" stroke="${neon}55" stroke-width="1.3" style="cursor:pointer"/>
+    <circle id="ds-rstick-dot" cx="367" cy="196" r="14"
+            fill="${neon}20" stroke="${neon}88" stroke-width="1" style="pointer-events:none"/>
+    <text x="367" y="196" text-anchor="middle" dominant-baseline="middle"
+          fill="${neon}88" font-size="7" font-family="monospace,sans-serif" style="pointer-events:none">R3</text>
+
+    <!-- Create / Options -->
+    ${mkCircle('ds-create',  230, 160, 10, 'Cre', null, sysMap[8])}
+    ${mkCircle('ds-options', 330, 160, 10, 'Opt', null, sysMap[9])}
+
+    <!-- PS button -->
+    ${mkCircle('ds-ps', 280, 250, 15, 'PS', null, sysMap[16])}
+  </svg>`;
+}
+
+function startGamepadPoll() {
+  if (gpPollId) return;
+  const STICK_MAX = 20; // max pixel offset for stick dot indicator
+  function poll() {
+    gpPollId = requestAnimationFrame(poll);
+    const svg = $id('ctrl-svg');
+    if (!svg) { stopGamepadPoll(); return; }
+
+    const gps = navigator.getGamepads ? navigator.getGamepads() : [];
+    let anyGp = false;
+    for (const gp of gps) { if (gp) { anyGp = true; break; } }
+
+    const status = $id('ctrl-gp-status');
+    if (status) {
+      status.textContent = anyGp ? '● Controller connected' : '○ No controller detected';
+      status.style.color = anyGp ? '#00ff18' : 'rgba(255,255,255,0.3)';
+    }
+
+    // Clear all active states
+    svg.querySelectorAll('.ds-active').forEach(el => {
+      el.classList.remove('ds-active');
+      el.style.filter = '';
+    });
+
+    if (!anyGp) return;
+    const gp = [...gps].find(g => g);
+    if (!gp) return;
+
+    // Highlight pressed buttons
+    gp.buttons.forEach((b, i) => {
+      if (!b.pressed && b.value < 0.1) return;
+      const def = DS_BUTTONS[i];
+      if (!def) return;
+      const el = $id(def.id);
+      if (!el) return;
+      el.classList.add('ds-active');
+      const col = def.color || EMULATOR_SYSTEMS.find(s => s.id === activeCtrlSystem)?.neon || '#00d8ff';
+      el.style.fill   = col + 'aa';
+      el.style.filter = `drop-shadow(0 0 6px ${col})`;
+    });
+
+    // Move stick dots with axes
+    const lx = gp.axes[0] || 0, ly = gp.axes[1] || 0;
+    const rx = gp.axes[2] || 0, ry = gp.axes[3] || 0;
+    const ldot = $id('ds-lstick-dot');
+    const rdot = $id('ds-rstick-dot');
+    if (ldot) { ldot.setAttribute('cx', 193 + lx * STICK_MAX); ldot.setAttribute('cy', 196 + ly * STICK_MAX); }
+    if (rdot) { rdot.setAttribute('cx', 367 + rx * STICK_MAX); rdot.setAttribute('cy', 196 + ry * STICK_MAX); }
+  }
+  gpPollId = requestAnimationFrame(poll);
+}
+
+function stopGamepadPoll() {
+  if (gpPollId) { cancelAnimationFrame(gpPollId); gpPollId = null; }
+}
+
+function renderControls() {
+  if (!activeCtrlSystem) activeCtrlSystem = EMULATOR_SYSTEMS[0].id;
+  const sys  = EMULATOR_SYSTEMS.find(s => s.id === activeCtrlSystem);
+  const neon = sys?.neon || '#00d8ff';
+  const content = $id('controls-content');
+
+  const tabs = EMULATOR_SYSTEMS.map(s =>
+    `<button class="ctrl-tab${s.id === activeCtrlSystem ? ' ctrl-tab--active' : ''}" data-sys="${s.id}" style="--ct:${s.neon}">${esc(s.name)}</button>`
+  ).join('');
+
+  content.innerHTML = `
+    <div class="ctrl-tabs">${tabs}</div>
+    <div class="ctrl-diagram">${buildDualSenseSVG(activeCtrlSystem)}</div>
+    <div class="ctrl-hint" style="display:flex;justify-content:center;gap:24px;align-items:center">
+      <span id="ctrl-gp-status" style="font-size:12px;color:rgba(255,255,255,0.3)">○ No controller detected</span>
+      <span style="color:var(--text-3);font-size:12px">Click a button to remap</span>
+    </div>
+    <div class="ctrl-actions">
+      <button class="btn btn-danger btn-sm" id="ctrl-reset">Reset ${esc(sys?.name || activeCtrlSystem)} to Defaults</button>
+    </div>`;
+
+  content.querySelectorAll('.ctrl-tab').forEach(tab => {
+    tab.addEventListener('click', () => { activeCtrlSystem = tab.dataset.sys; stopGamepadPoll(); renderControls(); });
+  });
+
+  // Click any ds-btn-g to remap
+  content.querySelectorAll('.ds-btn-g').forEach(el => {
+    el.addEventListener('click', async () => {
+      const btnId = el.dataset.id || el.id;
+      const label = el.dataset.label || btnId;
+      const input = await captureInput(neon, label);
+      if (input) {
+        const cfg = loadCtrlConfig();
+        if (!cfg[activeCtrlSystem]) cfg[activeCtrlSystem] = {};
+        cfg[activeCtrlSystem][btnId] = input;
+        saveCtrlConfig(cfg);
+        renderControls();
+      }
+    });
+  });
+
+  $id('ctrl-reset').addEventListener('click', () => {
+    if (confirm(`Reset ${sys?.name || activeCtrlSystem} remaps to defaults?`)) {
+      resetBindings(activeCtrlSystem);
+      renderControls();
+    }
+  });
+
+  startGamepadPoll();
 }
 
 // ── Boot ──────────────────────────────────────────────────────────────────────
