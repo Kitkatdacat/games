@@ -1,5 +1,15 @@
 'use strict';
 
+// Load .env if present
+const fs_env = require('fs'), path_env = require('path');
+const envPath = path_env.join(__dirname, '.env');
+if (fs_env.existsSync(envPath)) {
+  fs_env.readFileSync(envPath, 'utf8').split('\n').forEach(line => {
+    const m = line.match(/^\s*([A-Z_][A-Z0-9_]*)\s*=\s*(.*)$/);
+    if (m) process.env[m[1]] = m[2].trim().replace(/^['"]|['"]$/g, '');
+  });
+}
+
 const express  = require('express');
 const path     = require('path');
 const fs       = require('fs');
@@ -17,10 +27,10 @@ const {
   listGames, getGameById, createGame, updateGame, deleteGame,
   getLibraryEntry, listLibrary, upsertLibraryEntry, removeLibraryEntry, getLibraryStats,
   listSessions, getSessionById, startSession, endSession, createManualSession,
-  deleteSession: deletePlaytimeSession, getPlaytime, getOpenSession,
+  deleteSession: deletePlaytimeSession, getPlaytime, getOpenSession, getLastPlayedMap,
   listGenres, createGenre, deleteGenre,
   listPlatforms, createPlatform, deletePlatform,
-  listRoms, getRomById, createRom, deleteRom,
+  listRoms, getRomById, getGameByRomId, createRom, deleteRom,
   listHostedServers, getHostedServerById, createHostedServer, updateHostedServer, deleteHostedServer,
   listReviews, getReviewByUser, upsertReview, deleteReview,
 } = require('./db');
@@ -34,6 +44,24 @@ const romUpload = multer({
     filename: (req, file, cb) => cb(null, `${crypto.randomUUID()}-${file.originalname}`),
   }),
   limits: { fileSize: 512 * 1024 * 1024 }, // 512 MB
+});
+
+const imagesDir = path.join(__dirname, 'public', 'img', 'games');
+if (!fs.existsSync(imagesDir)) fs.mkdirSync(imagesDir, { recursive: true });
+
+const imageUpload = multer({
+  storage: multer.diskStorage({
+    destination: imagesDir,
+    filename: (req, file, cb) => {
+      const ext = path.extname(file.originalname).toLowerCase();
+      cb(null, `${crypto.randomUUID()}${ext}`);
+    },
+  }),
+  limits: { fileSize: 20 * 1024 * 1024 }, // 20 MB
+  fileFilter: (req, file, cb) => {
+    if (/^image\//.test(file.mimetype)) cb(null, true);
+    else cb(new Error('Images only'));
+  },
 });
 
 const app = express();
@@ -90,10 +118,10 @@ app.get('/api/me', requireAuth, (req, res) => res.json(safeUser(req.user)));
 app.get('/api/games', requireAuth, (req, res) => {
   const { search, genre, platform, tag, sort } = req.query;
   const games = listGames({ search, genre, platform, tag, sort });
-  // Merge each user's library entry into the game object
+  const lastPlayedMap = getLastPlayedMap(req.user.id);
   const result = games.map(g => {
     const entry = getLibraryEntry(req.user.id, g.id);
-    return { ...g, libraryEntry: entry || null };
+    return { ...g, libraryEntry: entry || null, last_played_at: lastPlayedMap[g.id] || null };
   });
   res.json(result);
 });
@@ -120,8 +148,19 @@ app.put('/api/games/:id', requireAuth, requireAdmin, (req, res) => {
   res.json(game);
 });
 
+app.post('/api/images', requireAuth, requireAdmin, imageUpload.single('image'), (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'No image provided' });
+  res.json({ url: `/img/games/${req.file.filename}` });
+});
+
 app.delete('/api/games/:id', requireAuth, requireAdmin, (req, res) => {
-  if (!getGameById(req.params.id)) return res.status(404).json({ error: 'Game not found' });
+  const game = getGameById(req.params.id);
+  if (!game) return res.status(404).json({ error: 'Game not found' });
+  if (game.rom_id) {
+    const rom = getRomById(game.rom_id);
+    if (rom) fs.unlink(path.join(romsDir, rom.filename), () => {});
+    deleteRom(game.rom_id);
+  }
   deleteGame(req.params.id);
   res.json({ ok: true });
 });
@@ -173,11 +212,13 @@ app.post('/api/games/:id/sessions/start', requireAuth, (req, res) => {
   if (open) endSession(open.id);
   try {
     const session = startSession(req.user.id, req.params.id, req.body.notes);
-    // Auto-set started_at on first ever session
     const entry = getLibraryEntry(req.user.id, req.params.id);
-    if (entry && !entry.started_at) {
-      upsertLibraryEntry(req.user.id, req.params.id, { started_at: session.started_at });
-    }
+    const updates = {};
+    // Auto-set started_at on first ever session
+    if (!entry?.started_at) updates.started_at = session.started_at;
+    // Auto-set status to playing unless already completed
+    if (!entry || ['backlog', 'wishlist', 'dropped'].includes(entry.status)) updates.status = 'playing';
+    if (Object.keys(updates).length) upsertLibraryEntry(req.user.id, req.params.id, updates);
     res.status(201).json(session);
   } catch (err) { res.status(400).json({ error: err.message }); }
 });
@@ -242,6 +283,106 @@ app.delete('/api/games/:id/reviews', requireAuth, (req, res) => {
 
 const RAWG_KEY = '4c0c771ed45649dbaa766c35a88bd940';
 
+// ── IGDB Lookup ───────────────────────────────────────────────────────────────
+
+const IGDB_CLIENT_ID     = process.env.IGDB_CLIENT_ID     || '';
+const IGDB_CLIENT_SECRET = process.env.IGDB_CLIENT_SECRET || '';
+
+let _igdbToken = null;
+let _igdbTokenExpiry = 0;
+
+async function getIgdbToken() {
+  if (_igdbToken && Date.now() < _igdbTokenExpiry - 60_000) return _igdbToken;
+  const r = await fetch(
+    `https://id.twitch.tv/oauth2/token?client_id=${IGDB_CLIENT_ID}&client_secret=${IGDB_CLIENT_SECRET}&grant_type=client_credentials`,
+    { method: 'POST' }
+  );
+  if (!r.ok) throw new Error('IGDB auth failed');
+  const d = await r.json();
+  _igdbToken = d.access_token;
+  _igdbTokenExpiry = Date.now() + d.expires_in * 1000;
+  return _igdbToken;
+}
+
+async function igdbPost(endpoint, body) {
+  const token = await getIgdbToken();
+  const r = await fetch(`https://api.igdb.com/v4/${endpoint}`, {
+    method: 'POST',
+    headers: {
+      'Client-ID': IGDB_CLIENT_ID,
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'text/plain',
+    },
+    body,
+  });
+  if (!r.ok) throw new Error(`IGDB ${endpoint} failed: ${r.status}`);
+  return r.json();
+}
+
+app.get('/api/igdb/search', requireAuth, requireAdmin, async (req, res) => {
+  if (!IGDB_CLIENT_ID) return res.status(503).json({ error: 'IGDB not configured' });
+  const { q, platform } = req.query;
+  if (!q) return res.status(400).json({ error: 'q required' });
+  try {
+    const platformFilter = platform ? `& platforms = ${parseInt(platform)}` : '';
+    let results = await igdbPost('games',
+      `fields id,name,first_release_date,cover.url,platforms.name;
+       search "${q.replace(/"/g, '')}";
+       ${platformFilter ? `where ${platformFilter.slice(2)};` : ''}
+       limit 12;`
+    );
+    // If platform filter returned nothing, retry without it
+    if (!results.length && platformFilter) {
+      results = await igdbPost('games',
+        `fields id,name,first_release_date,cover.url,platforms.name;
+         search "${q.replace(/"/g, '')}";
+         limit 12;`
+      );
+    }
+    res.json(results.map(g => ({
+      id:       g.id,
+      name:     g.name,
+      year:     g.first_release_date ? new Date(g.first_release_date * 1000).getFullYear() : null,
+      cover:    g.cover?.url?.replace('t_thumb', 't_cover_big') || null,
+      platforms: (g.platforms || []).map(p => p.name),
+    })));
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.get('/api/igdb/game/:id', requireAuth, requireAdmin, async (req, res) => {
+  if (!IGDB_CLIENT_ID) return res.status(503).json({ error: 'IGDB not configured' });
+  try {
+    const [game] = await igdbPost('games',
+      `fields name, summary, first_release_date, cover.url, artworks.url, screenshots.url,
+              genres.name, platforms.name,
+              involved_companies.company.name, involved_companies.developer, involved_companies.publisher;
+       where id = ${parseInt(req.params.id)};`
+    );
+    if (!game) return res.status(404).json({ error: 'Not found' });
+    const dev = game.involved_companies?.find(c => c.developer)?.company?.name || '';
+    const pub = game.involved_companies?.find(c => c.publisher)?.company?.name || '';
+    const cover = game.cover?.url?.replace('t_thumb', 't_cover_big_2x') || '';
+    const hero  = game.artworks?.[0]?.url?.replace('t_thumb', 't_1080p') || cover;
+    const allImages = [
+      ...(game.cover ? [{ url: `https:${cover}`, type: 'cover' }] : []),
+      ...(game.artworks || []).map(a => ({ url: `https:${a.url.replace('t_thumb', 't_1080p')}`, type: 'artwork' })),
+      ...(game.screenshots || []).map(s => ({ url: `https:${s.url.replace('t_thumb', 't_screenshot_big')}`, type: 'screenshot' })),
+    ];
+    res.json({
+      title:        game.name,
+      description:  game.summary || '',
+      cover_url:    cover ? `https:${cover}` : '',
+      hero_url:     hero  ? `https:${hero}`  : '',
+      release_year: game.first_release_date ? new Date(game.first_release_date * 1000).getFullYear() : null,
+      developer:    dev,
+      publisher:    pub,
+      genres:       (game.genres || []).map(g => g.name),
+      platforms:    (game.platforms || []).map(p => p.name),
+      all_images:   allImages,
+    });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 app.get('/api/rawg/search', requireAuth, requireAdmin, async (req, res) => {
   const q = req.query.q;
   if (!q) return res.status(400).json({ error: 'q required' });
@@ -257,8 +398,15 @@ app.get('/api/rawg/search', requireAuth, requireAdmin, async (req, res) => {
 });
 
 app.get('/api/rawg/game/:slug', requireAuth, requireAdmin, async (req, res) => {
-  const r = await fetch(`https://api.rawg.io/api/games/${req.params.slug}?key=${RAWG_KEY}`);
-  const g = await r.json();
+  const [r, sr] = await Promise.all([
+    fetch(`https://api.rawg.io/api/games/${req.params.slug}?key=${RAWG_KEY}`),
+    fetch(`https://api.rawg.io/api/games/${req.params.slug}/screenshots?key=${RAWG_KEY}`),
+  ]);
+  const [g, ss] = await Promise.all([r.json(), sr.json()]);
+  const allImages = [
+    ...(g.background_image ? [{ url: g.background_image, type: 'cover' }] : []),
+    ...(ss.results || []).map(s => ({ url: s.image, type: 'screenshot' })),
+  ];
   res.json({
     title:       g.name,
     description: g.description_raw || '',
@@ -270,6 +418,7 @@ app.get('/api/rawg/game/:slug', requireAuth, requireAdmin, async (req, res) => {
     platforms:   (g.platforms || []).map(x => x.platform.name),
     metacritic:  g.metacritic || null,
     rating_esrb: g.esrb_rating?.name || null,
+    all_images:  allImages,
   });
 });
 
@@ -338,6 +487,8 @@ app.delete('/api/roms/:id', requireAuth, requireAdmin, (req, res) => {
   const rom = getRomById(req.params.id);
   if (!rom) return res.status(404).json({ error: 'ROM not found' });
   fs.unlink(path.join(romsDir, rom.filename), () => {});
+  const linkedGame = getGameByRomId(req.params.id);
+  if (linkedGame) deleteGame(linkedGame.id);
   deleteRom(req.params.id);
   res.json({ ok: true });
 });

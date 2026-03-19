@@ -3,3 +3,5 @@ games.db
 *.db-shm
 *.db-wal
 roms/
+.env
+public/img/games/

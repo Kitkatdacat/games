@@ -321,6 +321,15 @@ function getPlaytime(userId, gameId) {
   return { total_min: row.total, sessions: listSessions(userId, gameId) };
 }
 
+function getLastPlayedMap(userId) {
+  const rows = db.prepare(`
+    SELECT game_id, MAX(started_at) AS last_played_at
+    FROM playtime_sessions WHERE user_id = ?
+    GROUP BY game_id
+  `).all(userId);
+  return Object.fromEntries(rows.map(r => [r.game_id, r.last_played_at]));
+}
+
 function getOpenSession(userId, gameId) {
   return db.prepare(`
     SELECT * FROM playtime_sessions WHERE user_id = ? AND game_id = ? AND ended_at IS NULL
@@ -358,6 +367,11 @@ function listRoms(system = '') {
 
 function getRomById(id) {
   return db.prepare('SELECT * FROM roms WHERE id = ?').get(id) || null;
+}
+
+function getGameByRomId(romId) {
+  const g = db.prepare('SELECT * FROM games WHERE rom_id = ?').get(romId);
+  return g ? parseGame(g) : null;
 }
 
 function createRom({ system, name, filename, size }) {
@@ -440,10 +454,10 @@ module.exports = {
   listGames, getGameById, createGame, updateGame, deleteGame,
   getLibraryEntry, listLibrary, upsertLibraryEntry, removeLibraryEntry, getLibraryStats,
   listSessions, getSessionById, startSession, endSession, createManualSession,
-  deleteSession, getPlaytime, getOpenSession,
+  deleteSession, getPlaytime, getOpenSession, getLastPlayedMap,
   listGenres, createGenre, deleteGenre,
   listPlatforms, createPlatform, deletePlatform,
-  listRoms, getRomById, createRom, deleteRom,
+  listRoms, getRomById, getGameByRomId, createRom, deleteRom,
   listHostedServers, getHostedServerById, createHostedServer, updateHostedServer, deleteHostedServer,
   listReviews, getReviewByUser, upsertReview, deleteReview,
 };

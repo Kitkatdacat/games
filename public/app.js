@@ -15,6 +15,9 @@ const _urlToken = new URLSearchParams(window.location.search).get('hubToken');
 if (_urlToken) localStorage.setItem('tkn_games', _urlToken);
 
 let token           = localStorage.getItem('tkn_games') || null;
+{ const _c = localStorage.getItem('profile_neon') || '#ff8c00';
+  document.documentElement.style.setProperty('--profile-neon', _c === 'rainbow' ? '#00d8ff' : _c);
+  if (_c === 'rainbow') document.documentElement.setAttribute('data-profile', 'rainbow'); }
 let currentUser     = null;
 let games           = [];
 let genres          = [];
@@ -30,7 +33,9 @@ let filterPlatform  = '';
 let heroGames       = [];
 let heroIndex       = 0;
 let heroTimer       = null;
+const heroDotColors = ['#00d8ff', '#d0ff00', '#ff00e1', '#00ff18', '#ff0000', '#ff8c00'];
 let editingGameId   = null;   // null = creating new
+let gfDoSearch      = null;   // set by renderGameForm when adding a new game
 let hostedServers   = [];
 let hostedPollTimer = null;
 
@@ -100,8 +105,6 @@ function $id(id) { return document.getElementById(id); }
 function applyTheme(t) {
   document.documentElement.setAttribute('data-theme', t);
   localStorage.setItem('games-theme', t);
-  $id('dd-theme-dark').classList.toggle('active', t === 'dark');
-  $id('dd-theme-light').classList.toggle('active', t === 'light');
 }
 
 // ── Init ──────────────────────────────────────────────────────────────────────
@@ -140,6 +143,16 @@ async function refreshData() {
   ]);
 }
 
+function applyProfileNeon(color) {
+  const isRainbow = color === 'rainbow';
+  // For rainbow, cycle through the neon colors for text/icon elements
+  document.documentElement.style.setProperty('--profile-neon', isRainbow ? '#00d8ff' : color);
+  document.documentElement.setAttribute('data-profile', isRainbow ? 'rainbow' : '');
+  document.querySelectorAll('.dd-swatch').forEach(s =>
+    s.classList.toggle('active', s.dataset.color === color)
+  );
+}
+
 function setUserChip() {
   const name = `${currentUser.firstName || ''} ${currentUser.lastName || ''}`.trim() || currentUser.username;
   const initial = (currentUser.firstName?.[0] || currentUser.username[0]).toUpperCase();
@@ -153,10 +166,17 @@ async function refreshDropdownStats() {
   try {
     const stats = await api('GET', '/api/library/stats');
     const el = $id('dd-library-stats');
+    const _neons = ['#00d8ff','#d0ff00','#ff00e1','#00ff18','#ff0000','#ff8c00'];
+    const _isRainbow = document.documentElement.getAttribute('data-profile') === 'rainbow';
+    let _ni = 0;
+    const n = v => {
+      const color = _isRainbow ? _neons[_ni++ % _neons.length] : 'var(--profile-neon,#ff8c00)';
+      return `<span style="color:${color};font-weight:700">${v}</span>`;
+    };
     if (el) el.innerHTML =
-      `<div>${stats.total} game${stats.total !== 1 ? 's' : ''} in library</div>` +
-      `<div>${formatPlaytime(stats.totalPlaytimeMin)} played</div>` +
-      `<div>${stats.byStatus.playing || 0} playing · ${stats.byStatus.completed || 0} completed</div>`;
+      `<div>${n(stats.total)} game${stats.total !== 1 ? 's' : ''} in library</div>` +
+      `<div>${n(formatPlaytime(stats.totalPlaytimeMin))} played</div>` +
+      `<div>${n(stats.byStatus.playing || 0)} playing · ${n(stats.byStatus.completed || 0)} completed</div>`;
   } catch {}
 }
 
@@ -258,7 +278,7 @@ function renderHero() {
 
 function renderHeroDots() {
   $id('hero-dots').innerHTML = heroGames.map((_, i) =>
-    `<button class="hero-dot${i === 0 ? ' active' : ''}" data-i="${i}"></button>`
+    `<button class="hero-dot${i === 0 ? ' active' : ''}" data-i="${i}" style="--dc:${heroDotColors[i % heroDotColors.length]}"></button>`
   ).join('');
 }
 
@@ -295,6 +315,12 @@ function setHeroSlide(i) {
   document.querySelectorAll('.hero-dot').forEach((d, idx) =>
     d.classList.toggle('active', idx === heroIndex)
   );
+  const heroColor = heroDotColors[heroIndex % heroDotColors.length];
+  document.querySelectorAll('.hero-arrow').forEach(a => {
+    a.style.color = heroColor;
+    a.style.filter = `drop-shadow(0 0 4px ${heroColor})`;
+    a.style.boxShadow = `0 0 10px ${heroColor}4d, inset 0 0 6px ${heroColor}0d`;
+  });
   $id('hero-detail-btn').onclick = () => openDetailModal(g.id);
 
   const playBtn = $id('hero-play-btn');
@@ -325,7 +351,7 @@ function setHeroSlide(i) {
 
 function startHeroRotation() {
   clearInterval(heroTimer);
-  if (heroGames.length > 1) heroTimer = setInterval(() => setHeroSlide(heroIndex + 1), 7000);
+  if (heroGames.length > 1) heroTimer = setInterval(() => setHeroSlide(heroIndex + 1), 12000);
 }
 
 // ── Shelf System ──────────────────────────────────────────────────────────────
@@ -338,19 +364,41 @@ function renderHome() {
   const gamesInStatus = s => games.filter(g => g.libraryEntry?.status === s);
   const newestGames   = games.slice().sort((a,b) => b.created_at?.localeCompare(a.created_at)).slice(0, 20);
   const topRated      = games.slice().sort((a,b) => (b.metacritic||0) - (a.metacritic||0)).filter(g => g.metacritic).slice(0, 20);
+  const recentlyPlayed = games.filter(g => g.last_played_at).sort((a,b) => b.last_played_at.localeCompare(a.last_played_at)).slice(0, 20);
+  const classics      = games.filter(g => g.release_year && g.release_year <= 2000).sort((a,b) => (b.metacritic||0) - (a.metacritic||0));
+
+  const genreShelves = [...new Set(games.flatMap(g => g.genres || []))].sort().map(genre => ({
+    id: `genre-${genre.toLowerCase().replace(/\s+/g,'-')}`,
+    label: genre,
+    list: games.filter(g => (g.genres || []).includes(genre)),
+  }));
+
+  const platformShelves = [...new Set(games.flatMap(g => g.platforms || []))].sort().map(platform => ({
+    id: `platform-${platform.toLowerCase().replace(/\s+/g,'-')}`,
+    label: platform,
+    list: games.filter(g => (g.platforms || []).includes(platform)),
+  }));
 
   const shelves = [
-    { id: 'continue',  label: 'Continue Playing',   list: gamesInStatus('playing') },
-    { id: 'new',       label: 'New to the Catalog',  list: newestGames },
-    { id: 'backlog',   label: 'Your Backlog',         list: gamesInStatus('backlog') },
-    { id: 'top-rated', label: 'Top Rated',            list: topRated },
-    { id: 'completed', label: 'Completed',            list: gamesInStatus('completed') },
-    { id: 'all',       label: 'All Games',            list: games },
+    { id: 'continue',        label: 'Continue Playing',   list: gamesInStatus('playing') },
+    { id: 'new',             label: 'New to the Catalog', list: newestGames },
+    { id: 'recently-played', label: 'Recently Played',    list: recentlyPlayed },
+    { id: 'backlog',         label: 'Your Backlog',        list: gamesInStatus('backlog') },
+    { id: 'top-rated',       label: 'Top Rated',           list: topRated },
+    { id: 'classics',        label: 'Classic Games',       list: classics },
+    { id: 'completed',       label: 'Completed',           list: gamesInStatus('completed') },
+    ...genreShelves,
+    ...platformShelves,
+    { id: 'all',             label: 'All Games',           list: games },
   ];
 
+  const neonColors = ['#00d8ff', '#d0ff00', '#ff00e1', '#00ff18', '#ff0000'];
+  let colorIdx = 0;
   for (const s of shelves) {
-    if (!s.list.length) continue;
-    container.insertAdjacentHTML('beforeend', renderShelf(s.id, s.label, s.list));
+    const alwaysShow = ['backlog', 'recently-played'].includes(s.id);
+    if (alwaysShow ? s.list.length === 0 : s.list.length < 6) continue;
+    container.insertAdjacentHTML('beforeend', renderShelf(s.id, s.label, s.list.slice(0, 15), neonColors[colorIdx % neonColors.length], s.list.length));
+    colorIdx++;
   }
 
   // Attach shelf scroll arrow events
@@ -375,23 +423,33 @@ function renderHome() {
       }
     });
   });
+  // Show arrows only when the track actually overflows
+  container.querySelectorAll('.shelf-track').forEach(track => {
+    const updateArrows = () => {
+      const overflows = track.scrollWidth > track.clientWidth + 2;
+      track.querySelectorAll('.shelf-arrow').forEach(a => a.style.display = overflows ? '' : 'none');
+    };
+    updateArrows();
+    new ResizeObserver(updateArrows).observe(track);
+  });
+
   container.querySelectorAll('.shelf-see-all').forEach(btn => {
     btn.addEventListener('click', () => switchView('library'));
   });
   attachCardClicks(container);
 }
 
-function renderShelf(id, label, list) {
+function renderShelf(id, label, list, color = '#00d8ff', total = list.length) {
   return `
     <section class="shelf" id="shelf-${id}">
       <div class="shelf-header">
-        <h2 class="shelf-title">${esc(label)}</h2>
-        <button class="shelf-see-all">See All</button>
+        <h2 class="shelf-title" style="color:${color}">${esc(label)}</h2>
+        ${total > 15 ? '<button class="shelf-see-all">See All</button>' : ''}
       </div>
       <div class="shelf-track" id="shelf-track-${id}">
-        <button class="shelf-arrow shelf-arrow--left">&#8249;</button>
+        <button class="shelf-arrow shelf-arrow--left" style="--sc:${color}">&#8249;</button>
         ${list.map(renderGameCard).join('')}
-        <button class="shelf-arrow shelf-arrow--right">&#8250;</button>
+        <button class="shelf-arrow shelf-arrow--right" style="--sc:${color}">&#8250;</button>
       </div>
     </section>`;
 }
@@ -405,7 +463,7 @@ function renderGameCard(g, showStatus = false, showLibBtn = false) {
   const chips   = (g.platforms || []).slice(0, 2).map(p => `<span class="chip" style="font-size:9px">${esc(p)}</span>`).join('');
   const mcBadge = mc ? `<span class="game-card-mc ${mcColor(mc)}">${mc}</span>` : '';
   const badge   = status ? `<div class="game-card-badge">${esc(statusLabel(status))}</div>` : '';
-  const libBtn  = showLibBtn ? `<button class="card-lib-btn${inLib ? ' in-library' : ''}" data-lib="${esc(g.id)}">${inLib ? '— Remove' : '+ Library'}</button>` : '';
+  const libBtn  = showLibBtn ? `<button class="card-lib-btn${inLib ? ' in-library' : ''}" data-lib="${esc(g.id)}">${inLib ? '— Remove' : '+ Add'}</button>` : '';
   const style   = g.cover_url
     ? `background-image:url('${g.cover_url.replace(/'/g, '%27')}')`
     : 'background:linear-gradient(135deg,var(--surface-2),var(--surface-3))';
@@ -414,12 +472,12 @@ function renderGameCard(g, showStatus = false, showLibBtn = false) {
     <div class="game-card${status ? ' status-' + status : ''}" data-id="${esc(g.id)}" style="${style}">
       ${libBtn}
       ${badge}
+      ${mcBadge ? `<div class="game-card-mc-corner">${mcBadge}</div>` : ''}
       ${!g.cover_url ? `<div class="game-card-no-cover">${esc(g.title)}</div>` : ''}
       <div class="game-card-overlay">
         <div class="game-card-title">${esc(g.title)}</div>
         <div class="game-card-dev">${esc(g.developer || '')}</div>
         <div class="game-card-chips">${chips}</div>
-        ${mcBadge}
       </div>
     </div>`;
 }
@@ -446,7 +504,7 @@ function attachCardClicks(root) {
           toast('Removed from library');
         }
         await refreshData();
-        btn.textContent = adding ? '— Remove' : '+ Library';
+        btn.textContent = adding ? '— Remove' : '+ Add';
         btn.classList.toggle('in-library', adding);
       } catch (err) { toast(err.message, 'error'); }
     });
@@ -469,9 +527,9 @@ function renderLibrary() {
   }
 
   const total = games.filter(g => g.libraryEntry).length;
-  $id('library-stats-bar').textContent = total
-    ? `${total} game${total !== 1 ? 's' : ''} in your library`
-    : 'Your library is empty.';
+  $id('library-stats-bar').innerHTML = total
+    ? `<span style="color:#00d8ff;text-shadow:0 0 8px #00d8ff;font-size:18px;font-weight:700">${total}</span> <span class="stats-label">game${total !== 1 ? 's' : ''} in your library</span>`
+    : '<span class="stats-label">Your library is empty.</span>';
 }
 
 // ── Browse / Search View ──────────────────────────────────────────────────────
@@ -482,15 +540,18 @@ function renderSearch() {
 }
 
 function renderFilterStrips() {
+  const usedGenres    = new Set(games.flatMap(g => g.genres || []));
+  const usedPlatforms = new Set(games.flatMap(g => g.platforms || []));
+
   $id('genre-filter-strip').innerHTML =
     `<button class="filter-chip${!filterGenre ? ' active' : ''}" data-type="genre" data-val="">All Genres</button>` +
-    genres.map(g =>
+    genres.filter(g => usedGenres.has(g.name)).map(g =>
       `<button class="filter-chip${filterGenre === g.name ? ' active' : ''}" data-type="genre" data-val="${esc(g.name)}">${esc(g.name)}</button>`
     ).join('');
 
   $id('platform-filter-strip').innerHTML =
     `<button class="filter-chip${!filterPlatform ? ' active' : ''}" data-type="platform" data-val="">All Platforms</button>` +
-    platforms.map(p =>
+    platforms.filter(p => usedPlatforms.has(p.name)).map(p =>
       `<button class="filter-chip${filterPlatform === p.name ? ' active' : ''}" data-type="platform" data-val="${esc(p.name)}">${esc(p.name)}</button>`
     ).join('');
 
@@ -579,8 +640,6 @@ function renderModalInfo(game) {
   if (game.metacritic) {
     mcBadge.textContent = game.metacritic;
     mcBadge.className   = `mc-badge ${mcColor(game.metacritic)}`;
-    mcBadge.style.padding = '4px 10px'; mcBadge.style.borderRadius = '5px';
-    mcBadge.style.fontWeight = '800'; mcBadge.style.fontSize = '13px'; mcBadge.style.zIndex = '2';
     mcBadge.classList.remove('hidden');
   } else { mcBadge.classList.add('hidden'); }
 
@@ -669,7 +728,7 @@ async function renderReviews(gameId) {
         <span class="review-date">${timeAgo(r.created_at)}</span>
       </div>
       <div class="review-body">${esc(r.body)}</div>
-    </div>`).join('') : `<p style="color:var(--text-3);font-size:12px;margin-bottom:12px">No reviews yet.</p>`;
+    </div>`).join('') : `<p style="color:#fff;font-size:12px;margin-bottom:12px">No reviews yet.</p>`;
 
   // Pre-fill form if user already reviewed
   renderReviewStars($id('modal-review-stars'), mine?.rating || 0);
@@ -860,19 +919,70 @@ async function endActiveSession(gameId) {
 // ── Admin View ────────────────────────────────────────────────────────────────
 
 function renderAdmin() {
-  renderAdminCatalog();
-  document.querySelectorAll('.admin-tab').forEach(tab => {
-    tab.addEventListener('click', () => switchAdminTab(tab.dataset.atab));
+  const home = $id('games-admin-home');
+  const sub  = $id('games-admin-sub');
+  if (!home || !sub) return;
+
+  // Show home grid, hide sub-panel
+  home.classList.remove('hidden');
+  sub.classList.add('hidden');
+
+  // Wire nav cards
+  home.querySelectorAll('.games-admin-nav-card').forEach(card => {
+    // Clone to remove any prior listeners
+    const fresh = card.cloneNode(true);
+    card.parentNode.replaceChild(fresh, card);
+    fresh.addEventListener('click', () => switchAdminTab(fresh.dataset.atab));
   });
+
+  // Wire back button
+  const backBtn = $id('games-admin-back');
+  if (backBtn) {
+    const freshBack = backBtn.cloneNode(true);
+    backBtn.parentNode.replaceChild(freshBack, backBtn);
+    freshBack.addEventListener('click', () => {
+      sub.classList.add('hidden');
+      home.classList.remove('hidden');
+    });
+  }
 }
 
 function switchAdminTab(name) {
-  document.querySelectorAll('.admin-tab').forEach(t =>
-    t.classList.toggle('active', t.dataset.atab === name)
-  );
+  const home = $id('games-admin-home');
+  const sub  = $id('games-admin-sub');
+  if (!home || !sub) return;
+
+  // Navigate home → sub
+  home.classList.add('hidden');
+  sub.classList.remove('hidden');
+
+  // Carry the card's neon color into the sub-panel
+  const neonColors = {
+    'catalog': '#00d8ff',
+    'add-game': '#d0ff00',
+    'genres': '#ff00e1',
+    'platforms': '#00ff18',
+    'hosted-servers': '#ff8c00',
+  };
+  const neon = neonColors[name] || '#00d8ff';
+  sub.style.setProperty('--sub-neon', neon);
+
+  // Set sub-panel title
+  const titles = {
+    'catalog': 'Catalog',
+    'add-game': 'Add Game',
+    'genres': 'Genres',
+    'platforms': 'Platforms',
+    'hosted-servers': 'Hosted Servers',
+  };
+  const titleEl = $id('games-admin-sub-title');
+  if (titleEl) titleEl.textContent = titles[name] || name;
+
+  // Show correct panel
   document.querySelectorAll('.admin-tab-panel').forEach(p =>
     p.classList.toggle('hidden', p.id !== `admin-tab-${name}`)
   );
+
   if (name === 'catalog')        renderAdminCatalog();
   if (name === 'add-game')       renderGameForm(null);
   if (name === 'genres')         renderGenresAdmin();
@@ -880,23 +990,32 @@ function switchAdminTab(name) {
   if (name === 'hosted-servers') renderAdminHosted();
 }
 
-function renderAdminCatalog() {
+function renderAdminCatalog(query = '') {
   const wrap = $id('admin-game-table-wrap');
-  if (!games.length) {
-    wrap.innerHTML = `<div class="empty-state"><strong>No games yet.</strong><p>Use the Add Game tab to create the first one.</p></div>`;
-    return;
-  }
+  const filtered = (query
+    ? games.filter(g => g.title.toLowerCase().includes(query.toLowerCase()) ||
+                        (g.developer || '').toLowerCase().includes(query.toLowerCase()))
+    : [...games]
+  ).sort((a, b) => a.title.localeCompare(b.title));
+
   wrap.innerHTML = `
-    <div style="margin-bottom:12px;text-align:right">
-      <button class="btn btn-accent btn-sm" id="admin-add-game-quick">+ Add Game</button>
+    <div class="catalog-toolbar">
+      <input id="admin-catalog-search" class="admin-catalog-search" type="search" placeholder="Search games…"
+        value="${esc(query)}" style="flex:1" />
+      <button class="btn btn-danger btn-sm catalog-delete-selected hidden" id="catalog-delete-selected">
+        Delete Selected (<span id="catalog-selected-count">0</span>)
+      </button>
     </div>
+    ${!filtered.length ? `<div class="empty-state"><strong>${games.length ? 'No matches.' : 'No games yet.'}</strong></div>` : `
     <table class="admin-game-table">
       <thead><tr>
+        <th><input type="checkbox" id="catalog-select-all" class="catalog-checkbox" title="Select all" /></th>
         <th></th><th>Title</th><th>Developer</th><th>Year</th><th>Platforms</th><th>Metacritic</th><th></th>
       </tr></thead>
       <tbody>
-        ${games.map(g => `
-          <tr>
+        ${filtered.map(g => `
+          <tr data-row-id="${esc(g.id)}">
+            <td><input type="checkbox" class="catalog-checkbox catalog-row-check" data-id="${esc(g.id)}" /></td>
             <td>${g.cover_url ? `<img src="${esc(g.cover_url)}" alt="" loading="lazy">` : '<div class="admin-cover-placeholder"></div>'}</td>
             <td><strong>${esc(g.title)}</strong></td>
             <td>${esc(g.developer || '—')}</td>
@@ -910,9 +1029,59 @@ function renderAdminCatalog() {
           </tr>`
         ).join('')}
       </tbody>
-    </table>`;
+    </table>`}`;
 
-  $id('admin-add-game-quick').onclick = () => switchAdminTab('add-game');
+  const searchEl = $id('admin-catalog-search');
+  if (searchEl) {
+    searchEl.addEventListener('input', () => renderAdminCatalog(searchEl.value));
+    searchEl.focus();
+  }
+
+  // Selection logic
+  const updateSelectionUI = () => {
+    const checked = wrap.querySelectorAll('.catalog-row-check:checked');
+    const count = checked.length;
+    const delBtn = $id('catalog-delete-selected');
+    const countEl = $id('catalog-selected-count');
+    if (delBtn) delBtn.classList.toggle('hidden', count === 0);
+    if (countEl) countEl.textContent = count;
+    // Highlight selected rows
+    wrap.querySelectorAll('tr[data-row-id]').forEach(row => {
+      const cb = row.querySelector('.catalog-row-check');
+      row.classList.toggle('catalog-row-selected', cb?.checked || false);
+    });
+  };
+
+  const selectAll = $id('catalog-select-all');
+  if (selectAll) {
+    selectAll.addEventListener('change', () => {
+      wrap.querySelectorAll('.catalog-row-check').forEach(cb => { cb.checked = selectAll.checked; });
+      updateSelectionUI();
+    });
+  }
+
+  wrap.querySelectorAll('.catalog-row-check').forEach(cb => {
+    cb.addEventListener('change', () => {
+      if (selectAll) selectAll.checked = wrap.querySelectorAll('.catalog-row-check:not(:checked)').length === 0;
+      updateSelectionUI();
+    });
+  });
+
+  // Multi-delete
+  const delSelectedBtn = $id('catalog-delete-selected');
+  if (delSelectedBtn) {
+    delSelectedBtn.addEventListener('click', async () => {
+      const ids = [...wrap.querySelectorAll('.catalog-row-check:checked')].map(cb => cb.dataset.id);
+      if (!ids.length) return;
+      if (!confirm(`Delete ${ids.length} game${ids.length > 1 ? 's' : ''}? This cannot be undone.`)) return;
+      try {
+        await Promise.all(ids.map(id => api('DELETE', `/api/games/${id}`)));
+        await refreshData();
+        renderAdminCatalog(query);
+        toast(`${ids.length} game${ids.length > 1 ? 's' : ''} deleted`);
+      } catch (err) { toast(err.message, 'error'); }
+    });
+  }
 
   wrap.querySelectorAll('[data-edit]').forEach(btn => {
     btn.addEventListener('click', () => {
@@ -926,7 +1095,7 @@ function renderAdminCatalog() {
       try {
         await api('DELETE', `/api/games/${btn.dataset.del}`);
         await refreshData();
-        renderAdminCatalog();
+        renderAdminCatalog(query);
         toast('Game deleted');
       } catch (err) { toast(err.message, 'error'); }
     });
@@ -941,11 +1110,68 @@ function renderGameForm(gameId) {
 
   $id('admin-game-form').innerHTML = `
     <h3 style="margin-bottom:20px;font-size:16px">${game ? 'Edit' : 'Add'} Game</h3>
-    ${!game ? `<div style="display:flex;gap:8px;margin-bottom:20px">
-      <input id="gf-rawg-search" placeholder="Search RAWG to auto-fill…" style="flex:1" />
-      <button class="btn btn-ghost" id="gf-rawg-btn">Search</button>
+
+    <div class="gf-rom-upload-box">
+      <div class="gf-rom-upload-title">ROM Upload</div>
+      <div class="gf-rom-upload-row">
+        <select id="gf-rom-system" class="gf-rom-select">
+          <option value="">— System —</option>
+          ${EMULATOR_SYSTEMS.map(s => `<option value="${s.id}">${s.name}</option>`).join('')}
+        </select>
+        <input id="gf-rom-name" class="gf-rom-name-input" placeholder="ROM name…" />
+      </div>
+      <div class="gf-rom-upload-row" style="margin-top:8px">
+        <label class="gf-rom-file-label" for="gf-rom-file">
+          <svg viewBox="0 0 20 20" fill="none" width="16" height="16"><path d="M10 3v10M6 7l4-4 4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M3 17h14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+          Choose ROM
+        </label>
+        <input type="file" id="gf-rom-file" style="display:none" />
+        <span id="gf-rom-filename" class="gf-rom-filename">No file chosen</span>
+        <button class="btn btn-sub-neon btn-sm" id="gf-rom-upload-btn">Upload</button>
+      </div>
+      <div id="gf-rom-status" class="gf-upload-status"></div>
     </div>
-    <div id="gf-rawg-results" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px"></div>` : ''}
+
+    <div class="gf-upload-row">
+      <div class="gf-upload-box" id="gf-cover-upload-box">
+        <div class="gf-upload-preview" id="gf-cover-preview">${game?.cover_url ? `<img src="${esc(game.cover_url)}" />` : ''}</div>
+        <label class="gf-upload-label" for="gf-cover-file">
+          <svg viewBox="0 0 20 20" fill="none" width="20" height="20"><path d="M10 3v10M6 7l4-4 4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M3 17h14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+          Cover Image
+        </label>
+        <input type="file" id="gf-cover-file" accept="image/*" style="display:none" />
+        <div class="gf-upload-status" id="gf-cover-status"></div>
+      </div>
+      <div class="gf-upload-box" id="gf-hero-upload-box">
+        <div class="gf-upload-preview gf-upload-preview--wide" id="gf-hero-preview">${game?.hero_url ? `<img src="${esc(game.hero_url)}" />` : ''}</div>
+        <label class="gf-upload-label" for="gf-hero-file">
+          <svg viewBox="0 0 20 20" fill="none" width="20" height="20"><path d="M10 3v10M6 7l4-4 4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M3 17h14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+          Hero / Banner
+        </label>
+        <input type="file" id="gf-hero-file" accept="image/*" style="display:none" />
+        <div class="gf-upload-status" id="gf-hero-status"></div>
+      </div>
+    </div>
+
+    ${!game ? `<div class="gf-search-block">
+      <div class="gf-search-source-row">
+        <button class="gf-source-btn active" data-source="rawg">RAWG</button>
+        <button class="gf-source-btn" data-source="igdb">IGDB</button>
+        <select id="gf-igdb-platform" class="gf-rom-select" style="display:none;font-size:12px;padding:5px 10px">
+          <option value="18">NES</option>
+          <option value="19">SNES</option>
+          <option value="4">N64</option>
+          <option value="33">GBA</option>
+          <option value="7">PlayStation</option>
+          <option value="">All Platforms</option>
+        </select>
+      </div>
+      <div style="display:flex;gap:8px;margin-top:8px">
+        <input id="gf-rawg-search" class="admin-catalog-search" placeholder="Search to auto-fill…" style="flex:1" />
+        <button class="btn btn-sub-neon" id="gf-rawg-btn">Search</button>
+      </div>
+    </div>
+    <div id="gf-rawg-results" class="gf-results-grid"></div>` : ''}
     <div class="form-row-two">
       <div class="field-wrap"><label>Title *</label><input id="gf-title" value="${v('title')}" /></div>
       <div class="field-wrap"><label>Developer</label><input id="gf-dev" value="${v('developer')}" /></div>
@@ -956,8 +1182,8 @@ function renderGameForm(gameId) {
     </div>
     <div class="field-wrap"><label>Description</label><textarea id="gf-desc" rows="3">${v('description')}</textarea></div>
     <div class="form-row-two">
-      <div class="field-wrap"><label>Cover Image URL</label><input id="gf-cover" value="${v('cover_url')}" placeholder="https://…" /></div>
-      <div class="field-wrap"><label>Hero/Banner Image URL</label><input id="gf-hero" value="${v('hero_url')}" placeholder="https://…" /></div>
+      <div class="field-wrap"><label>Cover Image URL</label><input id="gf-cover" value="${v('cover_url')}" placeholder="https://… or upload above" /></div>
+      <div class="field-wrap"><label>Hero/Banner Image URL</label><input id="gf-hero" value="${v('hero_url')}" placeholder="https://… or upload above" /></div>
     </div>
     <div class="form-row-two">
       <div class="field-wrap"><label>Genres (comma-separated)</label><input id="gf-genres" value="${arr('genres')}" /></div>
@@ -980,13 +1206,146 @@ function renderGameForm(gameId) {
       <select id="gf-rom"><option value="">— None —</option></select>
     </div>
     <div style="display:flex;gap:10px;margin-top:20px">
-      <button class="btn btn-accent" id="gf-save">${game ? 'Save Changes' : 'Add Game'}</button>
+      <button class="btn btn-sub-neon" id="gf-save">${game ? 'Save Changes' : 'Add Game'}</button>
       ${game ? '<button class="btn btn-ghost" id="gf-cancel">Cancel</button>' : ''}
     </div>
     <div id="gf-error" class="field-error hidden" style="margin-top:8px"></div>`;
 
   $id('gf-save').onclick = saveGameForm;
   if ($id('gf-cancel')) $id('gf-cancel').onclick = () => switchAdminTab('catalog');
+
+  // Resize image to at least targetW×targetH (upscale only, preserve aspect ratio)
+  function resizeImageFile(file, targetW, targetH) {
+    return new Promise((resolve) => {
+      const img = new Image();
+      const url = URL.createObjectURL(file);
+      img.onload = () => {
+        URL.revokeObjectURL(url);
+        const scaleW = targetW / img.width;
+        const scaleH = targetH / img.height;
+        const scale  = Math.max(scaleW, scaleH, 1); // never shrink
+        const w = Math.round(img.width  * scale);
+        const h = Math.round(img.height * scale);
+        const canvas = document.createElement('canvas');
+        canvas.width  = w;
+        canvas.height = h;
+        const ctx = canvas.getContext('2d');
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = 'high';
+        ctx.drawImage(img, 0, 0, w, h);
+        canvas.toBlob(blob => resolve(new File([blob], file.name, { type: 'image/jpeg' })), 'image/jpeg', 0.92);
+      };
+      img.src = url;
+    });
+  }
+
+  // Image upload handlers
+  function wireImageUpload(fileInputId, previewId, urlInputId, statusId, targetW, targetH) {
+    const fileInput = $id(fileInputId);
+    const preview   = $id(previewId);
+    const urlInput  = $id(urlInputId);
+    const status    = $id(statusId);
+    if (!fileInput) return;
+
+    fileInput.addEventListener('change', async () => {
+      const file = fileInput.files[0];
+      if (!file) return;
+      status.textContent = 'Processing…';
+      try {
+        const resized = await resizeImageFile(file, targetW, targetH);
+        status.textContent = 'Uploading…';
+        const fd = new FormData();
+        fd.append('image', resized);
+        const res = await fetch('/api/images', {
+          method: 'POST',
+          headers: { 'x-hub-session': token || '' },
+          body: fd,
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Upload failed');
+        urlInput.value = data.url;
+        preview.innerHTML = `<img src="${data.url}" />`;
+        status.textContent = '✓ Uploaded';
+        setTimeout(() => { status.textContent = ''; }, 2000);
+      } catch (err) {
+        status.textContent = err.message;
+      }
+    });
+  }
+
+  wireImageUpload('gf-cover-file', 'gf-cover-preview', 'gf-cover', 'gf-cover-status', 600, 900);
+  wireImageUpload('gf-hero-file',  'gf-hero-preview',  'gf-hero',  'gf-hero-status',  1920, 1080);
+
+  // ROM file picker label
+  const romFileInput = $id('gf-rom-file');
+  const romFilename  = $id('gf-rom-filename');
+  if (romFileInput) {
+    romFileInput.addEventListener('change', () => {
+      const f = romFileInput.files[0];
+      romFilename.textContent = f ? f.name : 'No file chosen';
+      // Auto-fill name from cleaned filename
+      const nameInput = $id('gf-rom-name');
+      if (nameInput && f) {
+        nameInput.value = cleanRomName(f.name);
+      }
+    });
+  }
+
+  // ROM upload button
+  const romUploadBtn = $id('gf-rom-upload-btn');
+  if (romUploadBtn) {
+    romUploadBtn.addEventListener('click', async () => {
+      const system = $id('gf-rom-system').value;
+      const name   = $id('gf-rom-name').value.trim();
+      const file   = $id('gf-rom-file').files[0];
+      const status = $id('gf-rom-status');
+      if (!system) { status.textContent = 'Select a system first.'; return; }
+      if (!name)   { status.textContent = 'Enter a ROM name.'; return; }
+      if (!file)   { status.textContent = 'Choose a ROM file.'; return; }
+      status.textContent = 'Uploading…';
+      try {
+        const fd = new FormData();
+        fd.append('rom', file);
+        fd.append('system', system);
+        fd.append('name', name);
+        const res = await fetch('/api/roms', {
+          method: 'POST',
+          headers: { 'x-hub-session': token || '' },
+          body: fd,
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Upload failed');
+        // Refresh ROM selector and select the new ROM
+        const roms = await api('GET', '/api/roms');
+        const sel = $id('gf-rom');
+        if (sel) {
+          sel.innerHTML = '<option value="">— None —</option>' +
+            roms.map(r => `<option value="${r.id}"${r.id === data.id ? ' selected' : ''}>${esc(r.name)} (${r.system})</option>`).join('');
+        }
+        status.innerHTML = `✓ ROM uploaded — <button class="gf-hint-btn" id="gf-rom-test-btn">Test ROM</button>`;
+        $id('gf-rom-test-btn').onclick = () => {
+          activeEmuSystem = system;
+          launchEmulator(data.id, name);
+        };
+
+        // Auto-search IGDB using the ROM name + system
+        if (gfDoSearch) {
+          const cleanedName = cleanRomName(name);
+          const igdbPlatform = systemToIgdbPlatform[system] || '';
+
+          // Switch to IGDB source
+          document.querySelectorAll('.gf-source-btn').forEach(b => {
+            b.classList.toggle('active', b.dataset.source === 'igdb');
+          });
+          searchSource = 'igdb';
+          const platformSel = $id('gf-igdb-platform');
+          if (platformSel) { platformSel.value = igdbPlatform; platformSel.style.display = ''; }
+          $id('gf-rawg-search').value = cleanedName;
+          gfDoSearch();
+        }
+      } catch (err) { $id('gf-rom-status').textContent = err.message; }
+    });
+  }
 
   // Populate ROM selector
   api('GET', '/api/roms').then(roms => {
@@ -1001,38 +1360,166 @@ function renderGameForm(gameId) {
     });
   }).catch(() => {});
 
+  const systemToIgdbPlatform = { nes:'18', snes:'19', n64:'4', gba:'33', psx:'7', segaMD:'29', nds:'20' };
+  let searchSource = 'rawg';
+
+  function cleanRomName(filename) {
+    return filename
+      .replace(/\.[^.]+$/, '')                        // remove extension
+      .replace(/\s*\(([A-Z][a-z]*|Rev\s*[\w.]+|v[\d.]+|[UEJF]|UE|USA|Europe|Japan|World|Proto|Beta|Demo|Sample|Unl|Hack|Homebrew|Alt[^)]*)\)/gi, '')
+      .replace(/\s*\[[^\]]*\]/g, '')                  // remove [tags]
+      .replace(/\s*-\s*(USA|EUR|JPN|JAP|PAL|NTSC)$/i, '')
+      .replace(/\s+/g, ' ').trim();
+  }
+
   if (!game) {
-    const doSearch = async () => {
+    // Source toggle
+    document.querySelectorAll('.gf-source-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        searchSource = btn.dataset.source;
+        document.querySelectorAll('.gf-source-btn').forEach(b => b.classList.toggle('active', b === btn));
+        const platformSel = $id('gf-igdb-platform');
+        if (platformSel) platformSel.style.display = searchSource === 'igdb' ? '' : 'none';
+        $id('gf-rawg-search').placeholder = searchSource === 'igdb' ? 'Search IGDB to auto-fill…' : 'Search RAWG to auto-fill…';
+      });
+    });
+
+    gfDoSearch = async () => {
       const q = $id('gf-rawg-search').value.trim();
       if (!q) return;
-      const results = await api('GET', `/api/rawg/search?q=${encodeURIComponent(q)}`);
-      $id('gf-rawg-results').innerHTML = results.map(r => `
-        <button class="btn btn-ghost btn-sm rawg-result" data-slug="${r.slug}" style="display:flex;align-items:center;gap:6px">
-          ${r.cover ? `<img src="${esc(r.cover)}" style="width:28px;height:40px;object-fit:cover;border-radius:3px">` : ''}
-          <span>${esc(r.name)}${r.year ? ` <small style="color:var(--text-3)">(${r.year})</small>` : ''}</span>
-        </button>`).join('');
-      $id('gf-rawg-results').querySelectorAll('.rawg-result').forEach(btn => {
-        btn.onclick = async () => {
-          const detail = await api('GET', `/api/rawg/game/${btn.dataset.slug}`);
-          $id('gf-title').value    = detail.title || '';
-          $id('gf-dev').value      = detail.developer || '';
-          $id('gf-pub').value      = detail.publisher || '';
-          $id('gf-year').value     = detail.release_year || '';
-          $id('gf-desc').value     = detail.description || '';
-          $id('gf-cover').value    = detail.cover_url || '';
-          $id('gf-genres').value   = (detail.genres || []).join(', ');
-          $id('gf-platforms').value= (detail.platforms || []).join(', ');
-          $id('gf-mc').value       = detail.metacritic || '';
-          const esrb = $id('gf-esrb');
-          if (detail.rating_esrb) esrb.value = detail.rating_esrb;
-          $id('gf-rawg-results').innerHTML = '';
-          $id('gf-rawg-search').value = '';
-          toast('Details filled from RAWG', 'success');
-        };
-      });
+      const resultsEl = $id('gf-rawg-results');
+      resultsEl.innerHTML = '<span style="color:var(--text-3);font-size:12px">Searching…</span>';
+
+      try {
+        let results, source;
+        if (searchSource === 'igdb') {
+          const platform = $id('gf-igdb-platform')?.value || '';
+          results = await api('GET', `/api/igdb/search?q=${encodeURIComponent(q)}${platform ? `&platform=${platform}` : ''}`);
+          source = 'igdb';
+        } else {
+          results = await api('GET', `/api/rawg/search?q=${encodeURIComponent(q)}`);
+          source = 'rawg';
+        }
+
+        // Score results by name similarity to query
+        const normalize = s => s.toLowerCase().replace(/[^a-z0-9]/g, '');
+        const nq = normalize(q);
+        const scored = results.map(r => {
+          const nr = normalize(r.name);
+          let score = 0;
+          if (nr === nq) score = 3;
+          else if (nr.startsWith(nq) || nq.startsWith(nr)) score = 2;
+          else if (nr.includes(nq) || nq.includes(nr)) score = 1;
+          return { ...r, score };
+        }).sort((a, b) => b.score - a.score);
+
+        const noneMatch = scored.every(r => r.score === 0);
+        const platformSel = $id('gf-igdb-platform');
+        const platformActive = source === 'igdb' && platformSel?.value;
+
+        resultsEl.innerHTML = (scored.length ? scored.map((r, i) => {
+          const coverUrl = r.cover ? (source === 'igdb' ? 'https:' + r.cover : r.cover) : '';
+          const bestMatch = i === 0 && r.score > 0;
+          const platforms = (r.platforms || []).slice(0, 2).join(', ');
+          return `
+          <button class="gf-lookup-result${bestMatch ? ' gf-lookup-best' : ''}"
+            data-source="${source}"
+            data-id="${source === 'igdb' ? r.id : ''}"
+            data-slug="${source === 'rawg' ? (r.slug || '') : ''}">
+            <div class="gf-lookup-cover">
+              ${coverUrl ? `<img src="${esc(coverUrl)}" />` : '<div class="gf-lookup-no-cover">?</div>'}
+            </div>
+            <div class="gf-lookup-info">
+              ${bestMatch ? '<span class="gf-lookup-badge">Best Match</span>' : ''}
+              <div class="gf-lookup-name">${esc(r.name)}</div>
+              <div class="gf-lookup-meta">${[r.year, platforms].filter(Boolean).join(' · ')}</div>
+            </div>
+          </button>`;
+        }).join('') : '') +
+        (noneMatch || !scored.length ? `<div class="gf-no-match-hint">
+          ${scored.length ? "No close matches. " : "No results. "}
+          Try editing the search above${platformActive ? ' or <button class="gf-hint-btn" id="gf-clear-platform">remove the platform filter</button>' : ''}.
+        </div>` : '');
+
+        const clearPlatBtn = resultsEl.querySelector('#gf-clear-platform');
+        if (clearPlatBtn) {
+          clearPlatBtn.onclick = () => {
+            const platSel = $id('gf-igdb-platform');
+            if (platSel) platSel.value = '';
+            gfDoSearch();
+          };
+        }
+
+        resultsEl.querySelectorAll('.gf-lookup-result').forEach(btn => {
+          btn.onclick = async () => {
+            btn.style.opacity = '0.5';
+            let detail;
+            if (btn.dataset.source === 'igdb') {
+              detail = await api('GET', `/api/igdb/game/${btn.dataset.id}`);
+            } else {
+              detail = await api('GET', `/api/rawg/game/${btn.dataset.slug}`);
+            }
+            $id('gf-title').value    = detail.title || '';
+            $id('gf-dev').value      = detail.developer || '';
+            $id('gf-pub').value      = detail.publisher || '';
+            $id('gf-year').value     = detail.release_year || '';
+            $id('gf-desc').value     = detail.description || '';
+            $id('gf-cover').value    = detail.cover_url || '';
+            if (detail.hero_url) $id('gf-hero').value = detail.hero_url;
+            $id('gf-genres').value   = (detail.genres || []).join(', ');
+            $id('gf-platforms').value= (detail.platforms || []).join(', ');
+            if (detail.metacritic) $id('gf-mc').value = detail.metacritic;
+            if (detail.rating_esrb) $id('gf-esrb').value = detail.rating_esrb;
+
+            // Show image picker if multiple images available
+            const imgs = detail.all_images || [];
+            if (imgs.length > 1) {
+              resultsEl.innerHTML = `
+                <div class="gf-img-picker">
+                  <div class="gf-img-picker-label">Click an image to set it as <strong>Cover</strong> or <strong>Hero</strong></div>
+                  <div class="gf-img-picker-grid">
+                    ${imgs.map((img, i) => `
+                      <div class="gf-img-thumb" data-url="${esc(img.url)}" data-type="${img.type}">
+                        <img src="${esc(img.url)}" loading="lazy" />
+                        <div class="gf-img-thumb-tag">${img.type}</div>
+                        <div class="gf-img-thumb-btns">
+                          <button class="gf-img-set-btn" data-field="cover">Cover</button>
+                          <button class="gf-img-set-btn" data-field="hero">Hero</button>
+                        </div>
+                      </div>`).join('')}
+                  </div>
+                  <button class="gf-img-picker-done">Done</button>
+                </div>`;
+
+              resultsEl.querySelectorAll('.gf-img-set-btn').forEach(b => {
+                b.onclick = e => {
+                  e.stopPropagation();
+                  const url = b.closest('.gf-img-thumb').dataset.url;
+                  if (b.dataset.field === 'cover') $id('gf-cover').value = url;
+                  else $id('gf-hero').value = url;
+                  resultsEl.querySelectorAll('.gf-img-thumb').forEach(t => t.classList.remove('gf-img-selected-cover','gf-img-selected-hero'));
+                  b.closest('.gf-img-thumb').classList.add(`gf-img-selected-${b.dataset.field}`);
+                  toast(`${b.dataset.field === 'cover' ? 'Cover' : 'Hero'} image set`, 'success');
+                };
+              });
+
+              resultsEl.querySelector('.gf-img-picker-done').onclick = () => {
+                resultsEl.innerHTML = '';
+                $id('gf-rawg-search').value = '';
+              };
+            } else {
+              resultsEl.innerHTML = '';
+              $id('gf-rawg-search').value = '';
+              toast('Details filled', 'success');
+            }
+          };
+        });
+      } catch (err) {
+        resultsEl.innerHTML = `<span style="color:#ff4444;font-size:12px">${esc(err.message)}</span>`;
+      }
     };
-    $id('gf-rawg-btn').onclick = doSearch;
-    $id('gf-rawg-search').addEventListener('keydown', e => { if (e.key === 'Enter') doSearch(); });
+    $id('gf-rawg-btn').onclick = gfDoSearch;
+    $id('gf-rawg-search').addEventListener('keydown', e => { if (e.key === 'Enter') gfDoSearch(); });
   }
 }
 
@@ -1130,15 +1617,14 @@ function setupEvents() {
     btn.addEventListener('click', () => switchView(btn.dataset.view));
   });
 
-  // Header search
-  $id('search-input').addEventListener('input', debounce(e => {
-    searchQuery = e.target.value.trim();
-    if (activeView !== 'search') switchView('search');
-    else applySearchFilter();
-  }, 300));
-  $id('search-input').addEventListener('keydown', e => {
-    if (e.key === 'Enter' && activeView !== 'search') switchView('search');
-  });
+  // Browse search (moved into search view)
+  const searchInput = $id('search-input');
+  if (searchInput) {
+    searchInput.addEventListener('input', debounce(e => {
+      searchQuery = e.target.value.trim();
+      applySearchFilter();
+    }, 300));
+  }
 
   // User dropdown — open on click, close on mouseleave (with delay to bridge gap)
   let _ddCloseTimer;
@@ -1160,8 +1646,6 @@ function setupEvents() {
   });
 
   // Theme buttons
-  $id('dd-theme-dark').addEventListener('click',  () => applyTheme('dark'));
-  $id('dd-theme-light').addEventListener('click', () => applyTheme('light'));
 
   // Help
   $id('dd-help').addEventListener('click', () => {
@@ -1178,6 +1662,24 @@ function setupEvents() {
   $id('dd-admin').addEventListener('click', () => {
     $id('user-dropdown').classList.add('hidden');
     switchView('admin');
+  });
+
+  // Personalize — toggle color picker
+  $id('dd-personalize').addEventListener('click', () => {
+    $id('dd-color-picker').classList.toggle('hidden');
+  });
+
+  // Color swatches
+  const savedProfileNeon = localStorage.getItem('profile_neon') || '#ff8c00';
+  applyProfileNeon(savedProfileNeon);
+
+  document.querySelectorAll('.dd-swatch').forEach(swatch => {
+    swatch.addEventListener('click', () => {
+      const color = swatch.dataset.color;
+      applyProfileNeon(color);
+      localStorage.setItem('profile_neon', color);
+      $id('dd-color-picker').classList.add('hidden');
+    });
   });
 
   $id('hosted-add-btn').addEventListener('click', async () => {
@@ -1239,13 +1741,13 @@ function setupEvents() {
 // ── Emulators ─────────────────────────────────────────────────────────────────
 
 const EMULATOR_SYSTEMS = [
-  { id: 'nes',    name: 'NES',            color: '#E8E8E8', logo: 'img/systems/nes.svg', neon: '#00d8ff' },
-  { id: 'snes',   name: 'Super Nintendo', color: '#5B4F9E', neon: '#d0ff00' },
-  { id: 'n64',    name: 'Nintendo 64',    color: '#E8823A', neon: '#ff00e1' },
-  { id: 'gba',    name: 'Game Boy / GBA', color: '#4CAF82', neon: '#00ff18' },
-  { id: 'psx',    name: 'PlayStation',    color: '#00439C', neon: '#ff0000' },
-  { id: 'segaMD', name: 'Sega Genesis',   color: '#1A1A2E', neon: '#bf00ff' },
-  { id: 'nds',    name: 'Nintendo DS',    color: '#D4A017', neon: '#ff6a00' },
+  { id: 'nes',    name: 'NES',            color: '#E8E8E8', logo: 'img/systems/nes.svg', neon: '#00d8ff', desc: 'Nintendo Entertainment System (1983) — the console that revived the gaming industry. Runs via EmulatorJS (Nestopia core).' },
+  { id: 'snes',   name: 'Super Nintendo', color: '#5B4F9E', neon: '#d0ff00', desc: 'Super Nintendo Entertainment System (1990) — home to legendary RPGs and platformers. Runs via EmulatorJS (Snes9x core).' },
+  { id: 'n64',    name: 'Nintendo 64',    color: '#E8823A', neon: '#ff00e1', desc: 'Nintendo 64 (1996) — Nintendo\'s first 3D console. Runs via EmulatorJS (Mupen64Plus core).' },
+  { id: 'gba',    name: 'Game Boy / GBA', color: '#4CAF82', neon: '#00ff18', desc: 'Game Boy, Game Boy Color & Game Boy Advance (1989–2001) — Nintendo\'s iconic handheld line. Runs via EmulatorJS (mGBA core).' },
+  { id: 'psx',    name: 'PlayStation',    color: '#00439C', neon: '#ff0000', desc: 'Sony PlayStation (1994) — Sony\'s debut console that defined a generation. Runs via EmulatorJS (Beetle PSX core).' },
+  { id: 'segaMD', name: 'Sega Genesis',   color: '#1A1A2E', neon: '#bf00ff', desc: 'Sega Mega Drive / Genesis (1988) — Sega\'s powerhouse 16-bit console. Runs via EmulatorJS (Genesis Plus GX core).' },
+  { id: 'nds',    name: 'Nintendo DS',    color: '#D4A017', neon: '#ff6a00', desc: 'Nintendo DS (2004) — Nintendo\'s dual-screen handheld with touch support. Runs via EmulatorJS (melonDS core).' },
 ];
 
 let activeEmuSystem = null;
@@ -1303,19 +1805,17 @@ async function renderEmulators() {
     const isAdmin = currentUser?.role === 'admin';
 
     content.innerHTML = `
-      <div class="emu-list-header">
-        <button class="btn btn-ghost btn-sm" id="emu-back">← Back</button>
-        <h3 class="emu-list-title">${esc(sys?.name || activeEmuSystem)}</h3>
-        ${isAdmin ? `
-          <label class="btn btn-accent btn-sm" for="emu-upload-input" style="cursor:pointer">Upload ROM</label>
-          <input type="file" id="emu-upload-input" accept=".nes,.sfc,.smc,.z64,.n64,.v64,.gb,.gbc,.gba,.bin,.iso,.md,.smd,.gen,.nds" style="display:none">
-        ` : '<div></div>'}
+      <div class="emu-system-hero" style="--sys-neon:${sys?.neon || '#00d8ff'}">
+        <button class="btn btn-ghost btn-sm emu-back-btn" id="emu-back">← Back</button>
+        <h2 class="emu-system-hero-title" style="color:${sys?.neon || '#00d8ff'};text-shadow:0 0 16px ${sys?.neon || '#00d8ff'}">${esc(sys?.name || activeEmuSystem)}</h2>
+        <p class="emu-system-hero-desc">${esc(sys?.desc || '')}</p>
+        <div class="emu-system-hero-meta" style="color:${sys?.neon || '#00d8ff'}">${emuRoms.length} ROM${emuRoms.length !== 1 ? 's' : ''} available</div>
       </div>
       <div id="emu-rom-list">${
         !emuRoms.length
           ? `<div class="empty-state"><strong>No ROMs yet.</strong>${isAdmin ? '<p>Upload a ROM file to get started.</p>' : ''}</div>`
           : emuRoms.map(rom => `
-              <div class="emu-rom-item">
+              <div class="emu-rom-item" data-rom-id="${esc(rom.id)}" style="cursor:pointer">
                 <div class="emu-rom-icon">
                   <svg viewBox="0 0 20 20" fill="none" width="18" height="18"><rect x="3" y="4" width="14" height="12" rx="2" stroke="currentColor" stroke-width="1.5"/><path d="M7 8h6M7 11h4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
                 </div>
@@ -1325,7 +1825,6 @@ async function renderEmulators() {
                 </div>
                 <div class="emu-rom-actions">
                   <button class="btn btn-accent btn-sm emu-play-btn" data-id="${esc(rom.id)}" data-name="${esc(rom.name)}">▶ Play</button>
-                  ${isAdmin ? `<button class="btn btn-danger btn-sm emu-del-btn" data-id="${esc(rom.id)}" style="margin-left:6px">Del</button>` : ''}
                 </div>
               </div>`
           ).join('')
@@ -1333,12 +1832,16 @@ async function renderEmulators() {
 
     $id('emu-back').addEventListener('click', () => { activeEmuSystem = null; renderEmulators(); });
 
-    if (isAdmin && $id('emu-upload-input')) {
-      $id('emu-upload-input').addEventListener('change', uploadRom);
-    }
-
     content.querySelectorAll('.emu-play-btn').forEach(btn => {
-      btn.addEventListener('click', () => launchEmulator(btn.dataset.id, btn.dataset.name));
+      btn.addEventListener('click', e => { e.stopPropagation(); launchEmulator(btn.dataset.id, btn.dataset.name); });
+    });
+
+    content.querySelectorAll('.emu-rom-item').forEach(item => {
+      item.addEventListener('click', () => {
+        const romId = item.dataset.romId;
+        const linked = games.find(g => g.rom_id === romId);
+        if (linked) openDetailModal(linked.id);
+      });
     });
 
     if (isAdmin) {

@@ -29,45 +29,28 @@
   <!-- ── App shell ── -->
   <div id="app" class="hidden">
 
-    <header id="header">
-      <div class="header-left">
-        <svg class="app-logo" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <rect width="32" height="32" rx="6" fill="var(--accent)" opacity="0.15"/>
-          <path d="M8 16h4m-2-2v4M19 14h.01M22 14h.01M20.5 17a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3z" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-          <rect x="5" y="11" width="22" height="10" rx="3" stroke="var(--accent)" stroke-width="1.5"/>
-        </svg>
-        <span class="app-title">Games</span>
-      </div>
-      <div class="header-center">
-        <div class="search-wrap">
-          <svg class="search-icon" viewBox="0 0 20 20" fill="none"><circle cx="8.5" cy="8.5" r="5.5" stroke="var(--text-3)" stroke-width="1.5"/><path d="M15 15l-3-3" stroke="var(--text-3)" stroke-width="1.5" stroke-linecap="round"/></svg>
-          <input type="text" id="search-input" placeholder="Search games…" autocomplete="off" />
-        </div>
-      </div>
-      <div class="header-right"></div>
-    </header>
 
     <div id="body-wrap">
 
       <!-- ── Nav Sidebar ── -->
       <nav id="nav-sidebar">
-        <button class="nav-item nav-item--active" data-view="home" id="nav-home">
+        <button class="nav-item nav-item--active" data-view="home" id="nav-home" style="--ni:#00d8ff">
           <svg class="nav-icon" viewBox="0 0 20 20" fill="none"><path d="M3 9.5L10 3l7 6.5V17a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9.5z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><path d="M7 18v-6h6v6" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg>
           <span class="nav-label">Home</span>
         </button>
-        <button class="nav-item" data-view="library" id="nav-library">
+        <button class="nav-item" data-view="library" id="nav-library" style="--ni:#d0ff00">
           <svg class="nav-icon" viewBox="0 0 20 20" fill="none"><rect x="2" y="3" width="7" height="9" rx="1" stroke="currentColor" stroke-width="1.5"/><rect x="11" y="3" width="7" height="5" rx="1" stroke="currentColor" stroke-width="1.5"/><rect x="11" y="10" width="7" height="7" rx="1" stroke="currentColor" stroke-width="1.5"/><rect x="2" y="14" width="7" height="3" rx="1" stroke="currentColor" stroke-width="1.5"/></svg>
           <span class="nav-label">My Library</span>
         </button>
-        <button class="nav-item" data-view="search" id="nav-search">
+        <button class="nav-item" data-view="search" id="nav-search" style="--ni:#ff00e1">
           <svg class="nav-icon" viewBox="0 0 20 20" fill="none"><circle cx="8.5" cy="8.5" r="5.5" stroke="currentColor" stroke-width="1.5"/><path d="M15 15l-3-3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
           <span class="nav-label">Browse</span>
         </button>
-        <button class="nav-item" data-view="emulators" id="nav-emulators">
+        <button class="nav-item" data-view="emulators" id="nav-emulators" style="--ni:#00ff18">
           <svg class="nav-icon" viewBox="0 0 20 20" fill="none"><rect x="2" y="5" width="16" height="11" rx="2.5" stroke="currentColor" stroke-width="1.5"/><path d="M7 10.5h2m-1-1v2M13 10.5h.01M15 10.5h.01" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
           <span class="nav-label">Emulators</span>
         </button>
-        <button class="nav-item" data-view="hosted" id="nav-hosted">
+        <button class="nav-item" data-view="hosted" id="nav-hosted" style="--ni:#ff0000">
           <svg class="nav-icon" viewBox="0 0 20 20" fill="none"><rect x="2" y="3" width="16" height="12" rx="2" stroke="currentColor" stroke-width="1.5"/><path d="M6 7h2M6 10h2M10 7h4M10 10h4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><path d="M7 15v2M13 15v2M5 17h10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
           <span class="nav-label">Hosted</span>
         </button>
@@ -88,24 +71,32 @@
             <div class="dropdown-divider"></div>
             <div class="dropdown-stats" id="dd-library-stats">Loading…</div>
             <div class="dropdown-divider"></div>
-            <div class="dropdown-section">
-              <span class="dropdown-label">Theme</span>
-              <div class="theme-toggle-group">
-                <button class="theme-btn-opt active" id="dd-theme-dark">Dark</button>
-                <button class="theme-btn-opt" id="dd-theme-light">Light</button>
-              </div>
-            </div>
-            <div class="dropdown-divider"></div>
             <button class="dropdown-item hidden" id="dd-admin">
-              <svg viewBox="0 0 20 20" fill="none" width="14" height="14"><path d="M10 2a8 8 0 1 0 0 16A8 8 0 0 0 10 2zm0 3a1.5 1.5 0 1 1 0 3 1.5 1.5 0 0 1 0-3zm0 10a6 6 0 0 1-5-2.69c.02-1.66 3.33-2.57 5-2.57s4.98.91 5 2.57A6 6 0 0 1 10 15z" fill="var(--text-2)"/></svg>
+              <svg viewBox="0 0 20 20" fill="none" width="14" height="14"><path d="M10 2a8 8 0 1 0 0 16A8 8 0 0 0 10 2zm0 3a1.5 1.5 0 1 1 0 3 1.5 1.5 0 0 1 0-3zm0 10a6 6 0 0 1-5-2.69c.02-1.66 3.33-2.57 5-2.57s4.98.91 5 2.57A6 6 0 0 1 10 15z" fill="currentColor"/></svg>
               Admin Panel
             </button>
+            <button class="dropdown-item" id="dd-personalize">
+              <svg viewBox="0 0 20 20" fill="none" width="14" height="14"><circle cx="10" cy="10" r="7" stroke="currentColor" stroke-width="1.5"/><circle cx="10" cy="10" r="3" fill="currentColor"/></svg>
+              Personalize
+            </button>
+            <div id="dd-color-picker" class="dd-color-picker hidden">
+              <div class="dd-color-label">Profile Color</div>
+              <div class="dd-color-swatches">
+                <button class="dd-swatch" data-color="#00d8ff" style="--sw:#00d8ff" title="Cyan"></button>
+                <button class="dd-swatch" data-color="#d0ff00" style="--sw:#d0ff00" title="Lime"></button>
+                <button class="dd-swatch" data-color="#ff00e1" style="--sw:#ff00e1" title="Magenta"></button>
+                <button class="dd-swatch" data-color="#00ff18" style="--sw:#00ff18" title="Green"></button>
+                <button class="dd-swatch" data-color="#ff0000" style="--sw:#ff0000" title="Red"></button>
+                <button class="dd-swatch" data-color="#ff8c00" style="--sw:#ff8c00" title="Orange"></button>
+                <button class="dd-swatch dd-swatch--rainbow" data-color="rainbow" title="All Colors"></button>
+              </div>
+            </div>
             <button class="dropdown-item" id="dd-help">
-              <svg viewBox="0 0 20 20" fill="none" width="14" height="14"><circle cx="10" cy="10" r="8" stroke="var(--text-2)" stroke-width="1.5"/><path d="M10 14v-1" stroke="var(--text-2)" stroke-width="2" stroke-linecap="round"/><path d="M10 11c0-2 3-2 3-4a3 3 0 1 0-6 0" stroke="var(--text-2)" stroke-width="1.5" stroke-linecap="round"/></svg>
+              <svg viewBox="0 0 20 20" fill="none" width="14" height="14"><circle cx="10" cy="10" r="8" stroke="currentColor" stroke-width="1.5"/><path d="M10 14v-1" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M10 11c0-2 3-2 3-4a3 3 0 1 0-6 0" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
               Help
             </button>
             <button class="dropdown-item" id="dd-leave">
-              <svg viewBox="0 0 20 20" fill="none" width="14" height="14"><path d="M13 3H5a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h8M17 10H7m0 0 3-3m-3 3 3 3" stroke="var(--text-2)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              <svg viewBox="0 0 20 20" fill="none" width="14" height="14"><path d="M13 3H5a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h8M17 10H7m0 0 3-3m-3 3 3 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
               Leave to Hub
             </button>
           </div>
@@ -143,7 +134,7 @@
         <div class="view" data-view="library" id="view-library">
           <div class="view-inner">
             <div class="view-header">
-              <h2 class="view-title">My Library</h2>
+              <h2 class="view-title">My <span class="neon-letter" style="--nl:#00d8ff">L</span><span class="neon-letter" style="--nl:#d0ff00">I</span><span class="neon-letter" style="--nl:#ff00e1">B</span><span class="neon-letter" style="--nl:#00ff18">R</span><span class="neon-letter" style="--nl:#ff0000">A</span><span class="neon-letter" style="--nl:#ff8c00">R</span><span class="neon-letter" style="--nl:#00d8ff">Y</span></h2>
             </div>
             <div id="library-filter-tabs">
               <button class="lib-tab active" data-status="">All</button>
@@ -161,7 +152,11 @@
         <div class="view" data-view="search" id="view-search">
           <div class="view-inner">
             <div class="view-header">
-              <h2 class="view-title">Browse</h2>
+              <h2 class="view-title">Browse our <span class="neon-letter" style="--nl:#00d8ff">G</span><span class="neon-letter" style="--nl:#d0ff00">A</span><span class="neon-letter" style="--nl:#ff00e1">M</span><span class="neon-letter" style="--nl:#00ff18">E</span><span class="neon-letter" style="--nl:#ff8c00">S</span></h2>
+              <div class="search-wrap" style="margin-top:12px">
+                <svg class="search-icon" viewBox="0 0 20 20" fill="none"><circle cx="8.5" cy="8.5" r="5.5" stroke="#00d8ff" stroke-width="1.5"/><path d="M15 15l-3-3" stroke="#00d8ff" stroke-width="1.5" stroke-linecap="round"/></svg>
+                <input type="text" id="search-input" placeholder="Search games…" autocomplete="off" />
+              </div>
             </div>
             <div id="browse-filters">
               <div id="genre-filter-strip" class="filter-strip"></div>
@@ -175,7 +170,7 @@
         <div class="view" data-view="emulators" id="view-emulators">
           <div class="view-inner">
             <div class="view-header">
-              <h2 class="view-title">Emulators</h2>
+              <h2 class="view-title"><span class="neon-letter" style="--nl:#00d8ff">E</span><span class="neon-letter" style="--nl:#d0ff00">M</span><span class="neon-letter" style="--nl:#ff00e1">U</span><span class="neon-letter" style="--nl:#00ff18">L</span><span class="neon-letter" style="--nl:#ff0000">A</span><span class="neon-letter" style="--nl:#ff8c00">T</span><span class="neon-letter" style="--nl:#00d8ff">O</span><span class="neon-letter" style="--nl:#d0ff00">R</span><span class="neon-letter" style="--nl:#ff00e1">S</span></h2>
             </div>
             <div id="emulators-content"></div>
           </div>
@@ -185,7 +180,7 @@
         <div class="view" data-view="hosted" id="view-hosted">
           <div class="view-inner">
             <div class="view-header">
-              <h2 class="view-title">Hosted Servers</h2>
+              <h2 class="view-title"><span class="neon-letter" style="--nl:#00d8ff">H</span><span class="neon-letter" style="--nl:#d0ff00">O</span><span class="neon-letter" style="--nl:#ff00e1">S</span><span class="neon-letter" style="--nl:#00ff18">T</span><span class="neon-letter" style="--nl:#ff0000">E</span><span class="neon-letter" style="--nl:#ff8c00">D</span> <span class="neon-letter" style="--nl:#00d8ff">S</span><span class="neon-letter" style="--nl:#d0ff00">E</span><span class="neon-letter" style="--nl:#ff00e1">R</span><span class="neon-letter" style="--nl:#00ff18">V</span><span class="neon-letter" style="--nl:#ff0000">E</span><span class="neon-letter" style="--nl:#ff8c00">R</span><span class="neon-letter" style="--nl:#00d8ff">S</span></h2>
             </div>
             <div id="hosted-grid" class="hosted-grid"></div>
           </div>
@@ -194,50 +189,90 @@
         <!-- Admin View -->
         <div class="view" data-view="admin" id="view-admin">
           <div class="view-inner">
-            <div class="view-header">
-              <h2 class="view-title">Admin</h2>
-            </div>
-            <div class="admin-tabs">
-              <button class="admin-tab active" data-atab="catalog">Catalog</button>
-              <button class="admin-tab" data-atab="add-game">Add Game</button>
-              <button class="admin-tab" data-atab="genres">Genres</button>
-              <button class="admin-tab" data-atab="platforms">Platforms</button>
-              <button class="admin-tab" data-atab="hosted-servers">Hosted Servers</button>
-            </div>
-            <div id="admin-tab-catalog" class="admin-tab-panel">
-              <div id="admin-game-table-wrap"></div>
-            </div>
-            <div id="admin-tab-add-game" class="admin-tab-panel hidden">
-              <div id="admin-game-form"></div>
-            </div>
-            <div id="admin-tab-genres" class="admin-tab-panel hidden">
-              <div id="admin-genres-list"></div>
-              <div class="admin-add-row">
-                <input type="text" id="genre-input" placeholder="Genre name…" />
-                <button class="btn btn-accent" id="genre-add-btn">Add</button>
+
+            <!-- Admin Home -->
+            <div id="games-admin-home">
+              <div class="games-admin-header">
+                <span class="games-admin-badge">ADMINISTRATOR</span>
+                <h1 class="games-admin-title">Admin Panel</h1>
+                <p class="games-admin-subtitle">Manage the game catalog, genres, platforms, and hosted servers.</p>
+              </div>
+              <div class="games-admin-nav-grid">
+                <button class="games-admin-nav-card" data-atab="catalog" style="--card-neon:#00d8ff">
+                  <span class="games-admin-nav-icon">&#9632;</span>
+                  <span class="games-admin-nav-title">Catalog</span>
+                  <span class="games-admin-nav-desc">Browse and manage all games in the library</span>
+                  <span class="games-admin-nav-arrow">&#8594;</span>
+                </button>
+                <button class="games-admin-nav-card" data-atab="add-game" style="--card-neon:#d0ff00">
+                  <span class="games-admin-nav-icon">&#9632;</span>
+                  <span class="games-admin-nav-title">Add Game</span>
+                  <span class="games-admin-nav-desc">Add a new game manually or fetch from RAWG</span>
+                  <span class="games-admin-nav-arrow">&#8594;</span>
+                </button>
+                <button class="games-admin-nav-card" data-atab="genres" style="--card-neon:#ff00e1">
+                  <span class="games-admin-nav-icon">&#9632;</span>
+                  <span class="games-admin-nav-title">Genres</span>
+                  <span class="games-admin-nav-desc">Add and remove genre tags for filtering</span>
+                  <span class="games-admin-nav-arrow">&#8594;</span>
+                </button>
+                <button class="games-admin-nav-card" data-atab="platforms" style="--card-neon:#00ff18">
+                  <span class="games-admin-nav-icon">&#9632;</span>
+                  <span class="games-admin-nav-title">Platforms</span>
+                  <span class="games-admin-nav-desc">Manage platform tags used across the catalog</span>
+                  <span class="games-admin-nav-arrow">&#8594;</span>
+                </button>
+                <button class="games-admin-nav-card" data-atab="hosted-servers" style="--card-neon:#ff8c00">
+                  <span class="games-admin-nav-icon">&#9632;</span>
+                  <span class="games-admin-nav-title">Hosted Servers</span>
+                  <span class="games-admin-nav-desc">Configure and manage multiplayer game servers</span>
+                  <span class="games-admin-nav-arrow">&#8594;</span>
+                </button>
               </div>
             </div>
-            <div id="admin-tab-platforms" class="admin-tab-panel hidden">
-              <div id="admin-platforms-list"></div>
-              <div class="admin-add-row">
-                <input type="text" id="platform-input" placeholder="Platform name…" />
-                <button class="btn btn-accent" id="platform-add-btn">Add</button>
+
+            <!-- Admin Sub-panels -->
+            <div id="games-admin-sub" class="hidden">
+              <div class="games-admin-sub-header">
+                <button class="games-admin-back-btn" id="games-admin-back">&#8592; Back</button>
+                <h2 class="games-admin-sub-title" id="games-admin-sub-title"></h2>
+              </div>
+              <div id="admin-tab-catalog" class="admin-tab-panel hidden">
+                <div id="admin-game-table-wrap"></div>
+              </div>
+              <div id="admin-tab-add-game" class="admin-tab-panel hidden">
+                <div id="admin-game-form"></div>
+              </div>
+              <div id="admin-tab-genres" class="admin-tab-panel hidden">
+                <div id="admin-genres-list"></div>
+                <div class="admin-add-row">
+                  <input type="text" id="genre-input" placeholder="Genre name…" />
+                  <button class="btn btn-accent" id="genre-add-btn">Add</button>
+                </div>
+              </div>
+              <div id="admin-tab-platforms" class="admin-tab-panel hidden">
+                <div id="admin-platforms-list"></div>
+                <div class="admin-add-row">
+                  <input type="text" id="platform-input" placeholder="Platform name…" />
+                  <button class="btn btn-accent" id="platform-add-btn">Add</button>
+                </div>
+              </div>
+              <div id="admin-tab-hosted-servers" class="admin-tab-panel hidden">
+                <div id="admin-hosted-list"></div>
+                <div class="admin-add-row" style="flex-wrap:wrap;gap:8px">
+                  <input type="text" id="hosted-name-input" placeholder="Server name…" />
+                  <input type="text" id="hosted-host-input" placeholder="Host / IP…" style="width:130px" />
+                  <input type="number" id="hosted-port-input" placeholder="Port" style="width:70px" value="25565" />
+                  <input type="text" id="hosted-start-input" placeholder="Start command…" style="width:170px" />
+                  <input type="text" id="hosted-stop-input" placeholder="Stop command…" style="width:170px" />
+                  <input type="text" id="hosted-desc-input" placeholder="Description (optional)…" style="width:170px" />
+                  <input type="text" id="hosted-image-input" placeholder="Image path (e.g. img/servers/vanilla.jpg)…" style="width:230px" />
+                  <input type="text" id="hosted-config-input" placeholder="server.properties path (absolute)…" style="width:250px" />
+                  <button class="btn btn-accent" id="hosted-add-btn">Add</button>
+                </div>
               </div>
             </div>
-            <div id="admin-tab-hosted-servers" class="admin-tab-panel hidden">
-              <div id="admin-hosted-list"></div>
-              <div class="admin-add-row" style="flex-wrap:wrap;gap:8px">
-                <input type="text" id="hosted-name-input" placeholder="Server name…" />
-                <input type="text" id="hosted-host-input" placeholder="Host / IP…" style="width:130px" />
-                <input type="number" id="hosted-port-input" placeholder="Port" style="width:70px" value="25565" />
-                <input type="text" id="hosted-start-input" placeholder="Start command…" style="width:170px" />
-                <input type="text" id="hosted-stop-input" placeholder="Stop command…" style="width:170px" />
-                <input type="text" id="hosted-desc-input" placeholder="Description (optional)…" style="width:170px" />
-                <input type="text" id="hosted-image-input" placeholder="Image path (e.g. img/servers/vanilla.jpg)…" style="width:230px" />
-                <input type="text" id="hosted-config-input" placeholder="server.properties path (absolute)…" style="width:250px" />
-                <button class="btn btn-accent" id="hosted-add-btn">Add</button>
-              </div>
-            </div>
+
           </div>
         </div>
 
@@ -253,11 +288,13 @@
       <div id="modal-hero-wrap">
         <img id="modal-hero-img" src="" alt="" />
         <div id="modal-hero-gradient"></div>
-        <div id="modal-metacritic-badge" class="hidden"></div>
       </div>
       <div class="modal-body">
         <div class="modal-info-col">
-          <h2 id="modal-title"></h2>
+          <div class="modal-title-row">
+            <h2 id="modal-title"></h2>
+            <div id="modal-metacritic-badge" class="hidden"></div>
+          </div>
           <div id="modal-playtime-inline" class="modal-playtime-inline"></div>
           <div id="modal-meta-row" class="modal-meta-row"></div>
           <div id="modal-chips-row" class="modal-chips-row"></div>
@@ -295,15 +332,6 @@
             <div class="modal-section-title">Playtime</div>
             <div id="modal-playtime-total" class="playtime-total"></div>
             <div id="modal-session-list"></div>
-            <button class="btn btn-ghost btn-sm" id="modal-add-session-btn" style="margin-top:8px">+ Add manual session</button>
-            <div id="modal-manual-session" class="hidden" style="margin-top:10px">
-              <div class="form-row-two">
-                <div class="field-wrap"><label>Start</label><input type="datetime-local" id="ms-start"/></div>
-                <div class="field-wrap"><label>End</label><input type="datetime-local" id="ms-end"/></div>
-              </div>
-              <div class="field-wrap"><label>Notes</label><input type="text" id="ms-notes" placeholder="Optional note…"/></div>
-              <button class="btn btn-accent btn-sm" id="ms-save-btn">Save session</button>
-            </div>
           </div>
         </div>
       </div>
