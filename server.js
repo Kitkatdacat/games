@@ -480,7 +480,8 @@ app.get('/api/roms/:id/file', (req, res) => {
   if (!rom) return res.status(404).json({ error: 'ROM not found' });
   const filePath = path.join(romsDir, rom.filename);
   if (!fs.existsSync(filePath)) return res.status(404).json({ error: 'ROM file missing' });
-  res.download(filePath, rom.name + path.extname(rom.filename));
+  res.setHeader('Content-Type', 'application/octet-stream');
+  res.sendFile(filePath);
 });
 
 app.delete('/api/roms/:id', requireAuth, requireAdmin, (req, res) => {
