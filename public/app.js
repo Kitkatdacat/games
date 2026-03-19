@@ -35,6 +35,7 @@ let heroIndex       = 0;
 let heroTimer       = null;
 const heroDotColors = ['#00d8ff', '#d0ff00', '#ff00e1', '#00ff18', '#ff0000', '#ff8c00'];
 let editingGameId   = null;   // null = creating new
+let pendingRomId    = null;   // ROM uploaded but not yet saved to a game
 let gfDoSearch      = null;   // set by renderGameForm when adding a new game
 let hostedServers   = [];
 let hostedPollTimer = null;
@@ -236,7 +237,15 @@ function setAuthError(msg) {
 
 // ── View Switching ────────────────────────────────────────────────────────────
 
+async function cleanupPendingRom() {
+  if (!pendingRomId) return;
+  const id = pendingRomId;
+  pendingRomId = null;
+  try { await api('DELETE', `/api/roms/${id}`); } catch {}
+}
+
 async function switchView(name) {
+  cleanupPendingRom();
   activeView = name;
   document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
   const target = document.querySelector(`.view[data-view="${name}"]`);
@@ -395,7 +404,7 @@ function renderHome() {
   const neonColors = ['#00d8ff', '#d0ff00', '#ff00e1', '#00ff18', '#ff0000'];
   let colorIdx = 0;
   for (const s of shelves) {
-    const alwaysShow = ['backlog', 'recently-played'].includes(s.id);
+    const alwaysShow = ['backlog', 'recently-played', 'new'].includes(s.id);
     if (alwaysShow ? s.list.length === 0 : s.list.length < 6) continue;
     container.insertAdjacentHTML('beforeend', renderShelf(s.id, s.label, s.list.slice(0, 15), neonColors[colorIdx % neonColors.length], s.list.length));
     colorIdx++;
@@ -948,6 +957,7 @@ function renderAdmin() {
 }
 
 function switchAdminTab(name) {
+  cleanupPendingRom();
   const home = $id('games-admin-home');
   const sub  = $id('games-admin-sub');
   if (!home || !sub) return;
@@ -1212,7 +1222,7 @@ function renderGameForm(gameId) {
     <div id="gf-error" class="field-error hidden" style="margin-top:8px"></div>`;
 
   $id('gf-save').onclick = saveGameForm;
-  if ($id('gf-cancel')) $id('gf-cancel').onclick = () => switchAdminTab('catalog');
+  if ($id('gf-cancel')) $id('gf-cancel').onclick = async () => { await cleanupPendingRom(); switchAdminTab('catalog'); };
 
   // Resize image to at least targetW×targetH (upscale only, preserve aspect ratio)
   function resizeImageFile(file, targetW, targetH) {
@@ -1315,6 +1325,8 @@ function renderGameForm(gameId) {
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || 'Upload failed');
+        await cleanupPendingRom(); // delete previous pending ROM if user re-uploaded
+        pendingRomId = data.id;
         // Refresh ROM selector and select the new ROM
         const roms = await api('GET', '/api/roms');
         const sel = $id('gf-rom');
@@ -1555,6 +1567,8 @@ async function saveGameForm() {
       await api('POST', '/api/games', payload);
       toast('Game added', 'success');
     }
+    if (pendingRomId && pendingRomId !== payload.rom_id) await cleanupPendingRom();
+    else pendingRomId = null;
     await refreshData();
     switchAdminTab('catalog');
   } catch (err) {
@@ -1880,8 +1894,8 @@ async function uploadRom() {
 
 function launchEmulator(romId, romName) {
   const romUrl = window.location.origin + `/api/roms/${romId}/file`;
-  const url = `/emulator.html?core=${encodeURIComponent(activeEmuSystem)}&rom=${encodeURIComponent(romUrl)}&back=${encodeURIComponent(window.location.href)}`;
-  window.location.href = url;
+  const url = `/emulator.html?core=${encodeURIComponent(activeEmuSystem)}&rom=${encodeURIComponent(romUrl)}`;
+  window.open(url, '_blank');
 }
 
 function closeEmulator() {
