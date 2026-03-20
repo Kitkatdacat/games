@@ -10,14 +10,14 @@
   --danger-hover:  #FF4D80;
   --danger-dim:    rgba(255,45,107,.12);
   --success:       #00FFB2;
-  --bg:            #03030A;
-  --surface:       #07070F;
-  --surface-2:     #0C0C18;
-  --surface-3:     #111120;
-  --border:        #1E1E32;
-  --text:          #F0F0FF;
-  --text-2:        #8888BB;
-  --text-3:        #4A4A70;
+  --bg:            #000000;
+  --surface:       #080808;
+  --surface-2:     #101010;
+  --surface-3:     #181818;
+  --border:        #222222;
+  --text:          #F0F0F0;
+  --text-2:        #888888;
+  --text-3:        #444444;
   --shadow:        0 4px 24px rgba(0,0,0,.8);
   --shadow-sm:     0 2px 8px rgba(0,0,0,.6);
   --radius:        8px;
@@ -376,6 +376,12 @@ html, body {
 }
 .view-header { padding: 32px 48px 8px; }
 .view-title { font-size: 24px; font-weight: 700; }
+.view[data-view="emulators"] .view-title { opacity: 0.4; transition: opacity 250ms ease; }
+.view[data-view="emulators"] .view-title:hover { opacity: 1; }
+.view[data-view="library"] .view-title .neon-letter,
+.view[data-view="search"] .view-title .neon-letter,
+.view[data-view="hosted"] .view-title .neon-letter,
+.view[data-view="controls"] .view-title .neon-letter { opacity: 0.4; }
 .view[data-view="search"] .view-title,
 .view[data-view="library"] .view-title,
 .view[data-view="emulators"] .view-title,
@@ -385,11 +391,26 @@ html, body {
   color: var(--nl); text-shadow: 0 0 10px var(--nl);
   transition: text-shadow 150ms ease, opacity 150ms ease; cursor: default;
 }
-.view-title:has(.neon-letter:hover) .neon-letter { opacity: 0.3; }
-.neon-letter:hover {
+.view-title:has(.neon-letter:hover) .neon-letter:not(.neon-letter--lit) { opacity: 0.3; }
+.neon-letter:hover,
+.neon-letter--lit {
   opacity: 1 !important;
   text-shadow: 0 0 8px var(--nl), 0 0 20px var(--nl), 0 0 48px var(--nl), 0 0 80px var(--nl);
 }
+.view[data-view="library"] .view-title .neon-letter,
+.view[data-view="search"] .view-title .neon-letter,
+.view[data-view="hosted"] .view-title .neon-letter,
+.view[data-view="controls"] .view-title .neon-letter { cursor: pointer; }
+@keyframes neon-flicker {
+  0%   { opacity: 0.4; text-shadow: 0 0 10px var(--nl); }
+  20%  { opacity: 1;   text-shadow: 0 0 8px var(--nl), 0 0 20px var(--nl), 0 0 48px var(--nl); }
+  35%  { opacity: 0.3; text-shadow: 0 0 4px var(--nl); }
+  50%  { opacity: 1;   text-shadow: 0 0 8px var(--nl), 0 0 20px var(--nl), 0 0 48px var(--nl), 0 0 80px var(--nl); }
+  70%  { opacity: 0.6; text-shadow: 0 0 10px var(--nl); }
+  85%  { opacity: 1;   text-shadow: 0 0 8px var(--nl), 0 0 20px var(--nl), 0 0 48px var(--nl); }
+  100% { opacity: 0.4; text-shadow: 0 0 10px var(--nl); }
+}
+.neon-letter--flickering { animation: neon-flicker 600ms ease-in-out forwards; }
 .view[data-view="search"] .search-wrap { display: inline-flex; min-width: 420px; max-width: 720px; width: 45%; padding: 10px 20px; }
 .view[data-view="search"] #search-input { font-size: 18px; }
 .view[data-view="search"] .search-icon { width: 22px; height: 22px; }
@@ -1131,13 +1152,13 @@ html, body {
 .modal-overlay {
   position: fixed; inset: 0; background: rgba(0,0,0,.75);
   display: flex; align-items: center; justify-content: center;
-  z-index: 500; padding: 24px;
+  z-index: 500; padding: 8px;
 }
 .modal-box--game {
   background: #000; border: 1px solid var(--border);
   border-radius: var(--radius); box-shadow: var(--shadow);
-  width: 900px; max-width: 100%; max-height: 90vh;
-  overflow: hidden; display: flex; flex-direction: column;
+  width: clamp(700px, 54vw, 1300px); max-width: 96vw; max-height: 98vh; min-height: 80vh;
+  overflow-y: auto; overflow-x: hidden; display: flex; flex-direction: column;
   position: relative;
 }
 .modal-close {
@@ -1153,7 +1174,7 @@ html, body {
   position: absolute; top: 10px; left: 12px;
   background: rgba(0,255,24,.08); border: 1.5px solid rgba(0,255,24,.4); color: #00ff18;
   padding: 7px 18px; border-radius: var(--radius-sm);
-  font: inherit; font-size: 13px; font-weight: 700; cursor: pointer; z-index: 10;
+  font: inherit; font-size: max(12px, 0.78vw); font-weight: 700; cursor: pointer; z-index: 10;
   letter-spacing: .04em; transition: all 200ms ease;
 }
 .modal-library-btn:hover {
@@ -1168,7 +1189,7 @@ html, body {
   box-shadow: 0 0 20px rgba(255,0,0,0.5);
 }
 #modal-hero-wrap {
-  position: relative; height: 240px; flex-shrink: 0; overflow: hidden;
+  position: relative; height: max(200px, 25.6vh); flex-shrink: 0; overflow: hidden;
   background: var(--surface-2);
 }
 #modal-hero-img {
@@ -1185,31 +1206,33 @@ html, body {
 .modal-title-row h2 { margin: 0; }
 #modal-metacritic-badge {
   flex-shrink: 0;
-  padding: 4px 10px; border-radius: 5px;
-  font-size: 15px; font-weight: 800;
+  padding: 5px 12px; border-radius: 5px;
+  font-size: max(14px, 0.885vw); font-weight: 800;
 }
 .modal-body {
-  display: flex; overflow: hidden; flex: 1;
+  display: flex; flex: 1;
 }
 .modal-info-col {
-  flex: 0 0 55%; overflow-y: auto; padding: 20px 24px;
+  flex: 0 0 55%; padding: max(18px, 1.5vw) max(20px, 1.46vw);
   border-right: 1px solid var(--border);
 }
 .modal-controls-col {
-  flex: 0 0 45%; overflow-y: auto; padding: 20px 24px;
+  flex: 0 0 45%; padding: max(18px, 1.5vw) max(20px, 1.46vw);
 }
-.modal-info-col h2 { font-size: 26px; font-weight: 800; margin-bottom: 10px; }
-.modal-meta-row { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; font-size: 16px; color: var(--text-2); }
-.modal-meta-item { display: flex; align-items: center; gap: 4px; }
-.modal-chips-row { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 14px; font-size: 13px; }
-.modal-info-col p { font-size: 13px; color: var(--text-2); line-height: 1.7; margin-bottom: 16px; }
-.modal-section { margin-bottom: 24px; }
+.modal-info-col h2 { font-size: max(22px, 1.56vw); font-weight: 800; margin-bottom: max(10px, 0.7vw); }
+.modal-meta-row { display: flex; flex-wrap: wrap; gap: max(6px, 0.4vw); margin-bottom: max(12px, 0.8vw); font-size: max(14px, 0.94vw); color: var(--text-2); }
+.modal-meta-item { display: inline-flex; align-items: center; gap: 4px; }
+.modal-meta-dev { display: block; margin-top: max(4px, 0.3vw); font-size: max(12px, 0.72vw); color: var(--text-3); }
+.modal-chips-row { display: flex; flex-wrap: wrap; gap: max(5px, 0.3vw); margin-bottom: max(14px, 0.9vw); font-size: max(12px, 0.78vw); }
+.modal-chips-row .chip { font-size: max(10px, 0.42vw); padding: max(2px, 0.12vw) max(8px, 0.38vw); border-radius: max(3px, 0.15vw); }
+.modal-info-col p { font-size: max(12px, 0.78vw); color: var(--text-2); line-height: 1.7; margin-bottom: max(16px, 1vw); }
+.modal-section { margin-bottom: max(24px, 1.6vw); }
 .modal-section-title {
-  font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .12em;
-  color: var(--text-3); margin-bottom: 14px;
+  font-size: max(10px, 0.625vw); font-weight: 700; text-transform: uppercase; letter-spacing: .12em;
+  color: var(--text-3); margin-bottom: max(12px, 0.8vw);
 }
 .modal-reviews-box .modal-section-title {
-  font-size: 14px; color: #ff00e1; text-shadow: 0 0 8px #ff00e1;
+  font-size: max(13px, 0.83vw); color: #ff00e1; text-shadow: 0 0 8px #ff00e1;
 }
 #modal-review-body::placeholder { color: #fff; }
 .modal-trailer-wrap { position: relative; padding-top: 56.25%; background: var(--surface-2); border-radius: var(--radius-sm); overflow: hidden; }
@@ -1329,13 +1352,14 @@ html, body {
 /* ── Emulators ───────────────────────────────────────────────────────────── */
 .emu-systems-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-  gap: 20px; padding: 24px 48px 48px;
+  grid-template-columns: repeat(auto-fill, minmax(max(140px, 12vw), 1fr));
+  gap: max(12px, 1.2vw);
+  padding: max(16px, 1.5vw) max(24px, 3vw) max(32px, 3vw);
 }
 .emu-system-card {
   background: var(--surface); border: 1px solid var(--border);
   border-radius: var(--radius); overflow: hidden;
-  cursor: pointer; text-align: center; padding: 0 0 20px;
+  cursor: pointer; text-align: center; padding: 0 0 max(12px, 1.2vw);
   display: flex; flex-direction: column; align-items: center;
   transition: transform 200ms ease, box-shadow 200ms ease, border-color var(--trans);
 }
@@ -1345,12 +1369,13 @@ html, body {
   box-shadow: 0 8px 24px rgba(0,0,0,.5), 0 0 16px var(--card-neon);
 }
 .emu-system-icon {
-  width: 100%; height: 120px;
+  width: 100%; height: max(80px, 8vw);
   display: flex; align-items: center; justify-content: center;
-  margin-bottom: 14px;
+  margin-bottom: max(8px, 0.9vw);
 }
-.emu-system-name { font-size: 14px; font-weight: 700; margin-bottom: 4px; }
-.emu-system-count { font-size: 11px; color: var(--text-3); }
+.emu-system-name { font-size: max(12px, 0.85vw); font-weight: 700; margin-bottom: 4px; opacity: 0.45; transition: opacity 200ms ease; }
+.emu-system-card:hover .emu-system-name { opacity: 1; }
+.emu-system-count { font-size: max(10px, 0.65vw); color: var(--text-3); }
 
 .emu-list-header {
   display: flex; align-items: center; gap: 12px;

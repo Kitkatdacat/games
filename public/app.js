@@ -132,6 +132,17 @@ async function loadApp() {
     $id('nav-controls').classList.add('hidden');
   }
 
+  // Load profile color from hub preferences
+  try {
+    const prefs = await fetch(`${getHubUrl()}/api/user/preferences`, {
+      headers: { 'x-hub-session': token || '' },
+    }).then(r => r.ok ? r.json() : {});
+    if (prefs.profileNeon) {
+      localStorage.setItem('profile_neon', prefs.profileNeon);
+      applyProfileNeon(prefs.profileNeon);
+    }
+  } catch {}
+
   await refreshData();
   switchView('home');
   setupEvents();
@@ -659,12 +670,13 @@ function renderModalInfo(game) {
   $id('modal-title').textContent = game.title;
 
   // Meta row
-  $id('modal-meta-row').innerHTML = [
+  const _metaLine1 = [
     game.release_year ? `<span class="modal-meta-item">${game.release_year}</span>` : '',
-    game.developer    ? `<span class="modal-meta-item">by ${esc(game.developer)}</span>` : '',
     game.publisher && game.publisher !== game.developer ? `<span class="modal-meta-item">${esc(game.publisher)}</span>` : '',
     game.rating_esrb  ? `<span class="chip">${esc(game.rating_esrb)}</span>` : '',
-  ].join('<span class="modal-meta-item" style="color:var(--border)">·</span>');
+  ].filter(Boolean).join('<span class="modal-meta-item" style="color:var(--border)">·</span>');
+  const _metaLine2 = game.developer ? `<span class="modal-meta-item modal-meta-dev">by ${esc(game.developer)}</span>` : '';
+  $id('modal-meta-row').innerHTML = [_metaLine1, _metaLine2].filter(Boolean).join('<br>');
 
   // Chips row
   $id('modal-chips-row').innerHTML = [
@@ -1699,6 +1711,11 @@ function setupEvents() {
       const color = swatch.dataset.color;
       applyProfileNeon(color);
       localStorage.setItem('profile_neon', color);
+      fetch(`${getHubUrl()}/api/user/preferences`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', 'x-hub-session': token || '' },
+        body: JSON.stringify({ profileNeon: color }),
+      }).catch(() => {});
       $id('dd-color-picker').classList.add('hidden');
     });
   });
@@ -2451,6 +2468,37 @@ function renderControls() {
 
   startGamepadPoll();
 }
+
+// ── Neon letter random flicker ────────────────────────────────────────────────
+
+(function flickerLoop() {
+  const delay = 3000 + Math.random() * 7000;
+  setTimeout(() => {
+    const candidates = Array.from(document.querySelectorAll(
+      '.view[data-view="library"] .view-title .neon-letter:not(.neon-letter--lit),' +
+      '.view[data-view="search"] .view-title .neon-letter:not(.neon-letter--lit),' +
+      '.view[data-view="hosted"] .view-title .neon-letter:not(.neon-letter--lit),' +
+      '.view[data-view="controls"] .view-title .neon-letter:not(.neon-letter--lit)'
+    ));
+    if (candidates.length) {
+      const el = candidates[Math.floor(Math.random() * candidates.length)];
+      el.classList.add('neon-letter--flickering');
+      el.addEventListener('animationend', () => el.classList.remove('neon-letter--flickering'), { once: true });
+    }
+    flickerLoop();
+  }, delay);
+})();
+
+// ── Neon letter click-to-lock ──────────────────────────────────────────────────
+
+document.querySelectorAll(
+  '.view[data-view="library"] .view-title .neon-letter,' +
+  '.view[data-view="search"] .view-title .neon-letter,' +
+  '.view[data-view="hosted"] .view-title .neon-letter,' +
+  '.view[data-view="controls"] .view-title .neon-letter'
+).forEach(el => {
+  el.addEventListener('click', () => el.classList.toggle('neon-letter--lit'));
+});
 
 // ── Boot ──────────────────────────────────────────────────────────────────────
 init();
