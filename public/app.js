@@ -483,7 +483,7 @@ function renderHome() {
   container.querySelectorAll('.shelf-track').forEach(track => {
     const updateArrows = () => {
       const overflows = track.scrollWidth > track.clientWidth + 2;
-      track.querySelectorAll('.shelf-arrow').forEach(a => a.style.display = overflows ? '' : 'none');
+      track.closest('.shelf').querySelectorAll('.shelf-arrow').forEach(a => a.style.display = overflows ? '' : 'none');
     };
     updateArrows();
     new ResizeObserver(updateArrows).observe(track);
@@ -502,11 +502,11 @@ function renderShelf(id, label, list, color = '#00d8ff', total = list.length) {
         <h2 class="shelf-title" data-s-color="${color}">${esc(label)}</h2>
         ${total > 15 ? '<button class="shelf-see-all">See All</button>' : ''}
       </div>
+      <button class="shelf-arrow shelf-arrow--left" data-s-sc="${color}">&#8249;</button>
       <div class="shelf-track" id="shelf-track-${id}">
-        <button class="shelf-arrow shelf-arrow--left" data-s-sc="${color}">&#8249;</button>
         ${list.map(renderGameCard).join('')}
-        <button class="shelf-arrow shelf-arrow--right" data-s-sc="${color}">&#8250;</button>
       </div>
+      <button class="shelf-arrow shelf-arrow--right" data-s-sc="${color}">&#8250;</button>
     </section>`;
 }
 

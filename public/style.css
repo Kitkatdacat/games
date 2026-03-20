@@ -576,7 +576,6 @@ html, body {
   overflow-x: auto; scroll-behavior: smooth;
   padding: 4px 3vw 16px;
   scrollbar-width: none;
-  position: relative;
 }
 .shelf-track::-webkit-scrollbar { display: none; }
 .shelf-arrow {
