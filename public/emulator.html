@@ -54,7 +54,13 @@
     window.EJS_defaultOptions = {
       'input_menu_toggle_gamepad_combo': '0',
       'input_quit_gamepad_combo':        '0',
+      'input_enable_hotkey_btn':         '8',  // Share = must hold this for any hotkey to fire
     };
+    // Apply any button remaps configured in the Controls view
+    try {
+      const remaps = JSON.parse(localStorage.getItem('emu_input_opts') || 'null');
+      if (remaps) Object.assign(window.EJS_defaultOptions, remaps);
+    } catch {}
     window.EJS_Buttons = {
       playPause:     { visible: false },
       restart:       { visible: false },

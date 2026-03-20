@@ -1955,6 +1955,22 @@ async function uploadRom() {
 function launchEmulator(romId, romName) {
   const romUrl = window.location.origin + `/api/roms/${romId}/file`;
   const url = `/emulator.html?core=${encodeURIComponent(activeEmuSystem)}&rom=${encodeURIComponent(romUrl)}`;
+
+  // Translate any user remaps from the Controls view into RetroArch input options
+  // and stash them in localStorage for emulator.html to pick up on load.
+  const retroMap = SYSTEM_BTN_RETRO[activeEmuSystem] || {};
+  const userCfg  = loadCtrlConfig()[activeEmuSystem] || {};
+  const opts = {};
+  for (const [dsId, binding] of Object.entries(userCfg)) {
+    if (!binding || !binding.startsWith('GP:')) continue;
+    const defaultIdx = DS_BUTTONS.findIndex(b => b.id === dsId);
+    if (defaultIdx === -1) continue;
+    const retroKey = retroMap[defaultIdx];
+    if (!retroKey) continue;
+    opts[`input_player1_${retroKey}`] = String(parseInt(binding.slice(3)));
+  }
+  localStorage.setItem('emu_input_opts', JSON.stringify(opts));
+
   window.open(url, '_blank');
 }
 
@@ -2205,6 +2221,17 @@ const DS_SYSTEM_MAP = {
   psx:    { 0:'✕', 1:'○', 2:'□', 3:'△', 4:'L1', 5:'R1', 6:'L2', 7:'R2', 8:'Select', 9:'Start', 12:'↑', 13:'↓', 14:'←', 15:'→' },
   segaMD: { 0:'B', 1:'C', 2:'A', 9:'Start', 12:'↑', 13:'↓', 14:'←', 15:'→' },
   nds:    { 0:'B', 1:'A', 2:'Y', 3:'X', 4:'L', 5:'R', 8:'Select', 9:'Start', 12:'↑', 13:'↓', 14:'←', 15:'→' },
+};
+
+// Gamepad button index → RetroArch input_player1_* key, per system
+const SYSTEM_BTN_RETRO = {
+  nes:    { 0:'btn_b', 1:'btn_a', 8:'btn_select', 9:'btn_start', 12:'btn_up', 13:'btn_down', 14:'btn_left', 15:'btn_right' },
+  snes:   { 0:'btn_b', 1:'btn_a', 2:'btn_y', 3:'btn_x', 4:'btn_l', 5:'btn_r', 8:'btn_select', 9:'btn_start', 12:'btn_up', 13:'btn_down', 14:'btn_left', 15:'btn_right' },
+  n64:    { 0:'btn_b', 1:'btn_a', 4:'btn_l', 5:'btn_r', 6:'btn_l2', 9:'btn_start', 12:'btn_up', 13:'btn_down', 14:'btn_left', 15:'btn_right' },
+  gba:    { 0:'btn_b', 1:'btn_a', 4:'btn_l', 5:'btn_r', 8:'btn_select', 9:'btn_start', 12:'btn_up', 13:'btn_down', 14:'btn_left', 15:'btn_right' },
+  psx:    { 0:'btn_b', 1:'btn_a', 2:'btn_y', 3:'btn_x', 4:'btn_l', 5:'btn_r', 6:'btn_l2', 7:'btn_r2', 8:'btn_select', 9:'btn_start', 12:'btn_up', 13:'btn_down', 14:'btn_left', 15:'btn_right' },
+  segaMD: { 0:'btn_b', 1:'btn_a', 2:'btn_y', 9:'btn_start', 12:'btn_up', 13:'btn_down', 14:'btn_left', 15:'btn_right' },
+  nds:    { 0:'btn_b', 1:'btn_a', 2:'btn_y', 3:'btn_x', 4:'btn_l', 5:'btn_r', 8:'btn_select', 9:'btn_start', 12:'btn_up', 13:'btn_down', 14:'btn_left', 15:'btn_right' },
 };
 
 let activeCtrlSystem = null;
