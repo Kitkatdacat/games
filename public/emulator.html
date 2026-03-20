@@ -63,7 +63,7 @@
       quickLoad:     { visible: false },
       screenshot:    { visible: false },
       screenRecord:  { visible: false },
-      gamepad:       { visible: false },
+      gamepad:       { visible: true },
       cheat:         { visible: false },
       cacheManager:  { visible: false },
       saveSavFiles:  { visible: false },
@@ -73,7 +73,7 @@
       settings:      { visible: true },
     };
 
-    const HIDDEN_TABS = ['controls', 'input', 'core', 'backend', 'screen capture', 'screen record'];
+    const HIDDEN_TABS = ['core', 'backend', 'screen capture', 'screen record'];
 
     window.EJS_ready = function() {
       document.addEventListener('contextmenu', e => e.preventDefault(), true);
@@ -82,6 +82,53 @@
       document.getElementById('emu-pause').addEventListener('click', () => window.EJS_emulator.pause());
       document.getElementById('emu-qsave').addEventListener('click', () => window.EJS_emulator.gameManager.quickSave(1));
       document.getElementById('emu-qload').addEventListener('click', () => window.EJS_emulator.gameManager.quickLoad(1));
+
+      // Disable mouse input on the game canvas while a gamepad is actively being used
+      let gpMouseTimeout = null;
+      let gpMouseActive  = false;
+      const game = document.getElementById('game');
+      const blockMouse = e => { if (gpMouseActive) e.stopImmediatePropagation(); };
+      ['mousedown','mouseup','mousemove','click'].forEach(t => game.addEventListener(t, blockMouse, true));
+      function checkGamepads() {
+        const gps = navigator.getGamepads ? navigator.getGamepads() : [];
+        let active = false;
+        for (const gp of gps) {
+          if (!gp) continue;
+          if (gp.buttons.some(b => b.pressed)) { active = true; break; }
+          if (gp.axes.some(a => Math.abs(a) > 0.2)) { active = true; break; }
+        }
+        if (active) {
+          gpMouseActive = true;
+          clearTimeout(gpMouseTimeout);
+          gpMouseTimeout = setTimeout(() => { gpMouseActive = false; }, 2000);
+        }
+      }
+      setInterval(checkGamepads, 50);
+
+      // Escape closes the emulator
+      document.addEventListener('keydown', e => {
+        if (e.key === 'Escape' && !document.querySelector('.ejs_menu, .ejs_settings')) window.close();
+      });
+
+      // Disable mouse input on the game canvas while a gamepad is actively being used
+      let gpMouseTimeout = null;
+      let gpMouseActive  = false;
+      const game = document.getElementById('game');
+      const blockMouse = e => { if (gpMouseActive) e.stopImmediatePropagation(); };
+      ['mousedown', 'mouseup', 'mousemove', 'click'].forEach(t => game.addEventListener(t, blockMouse, true));
+      function checkGamepads() {
+        const gps = navigator.getGamepads ? navigator.getGamepads() : [];
+        for (const gp of gps) {
+          if (!gp) continue;
+          if (gp.buttons.some(b => b.pressed) || gp.axes.some(a => Math.abs(a) > 0.2)) {
+            gpMouseActive = true;
+            clearTimeout(gpMouseTimeout);
+            gpMouseTimeout = setTimeout(() => { gpMouseActive = false; }, 2000);
+            return;
+          }
+        }
+      }
+      setInterval(checkGamepads, 50);
 
       // Watch for settings panel: hide unwanted tabs and restore cursor while panel is open
       const observer = new MutationObserver(() => {
