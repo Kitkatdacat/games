@@ -16,6 +16,7 @@ const fs       = require('fs');
 const crypto   = require('crypto');
 const bcrypt   = require('bcryptjs');
 const multer   = require('multer');
+const AdmZip   = require('adm-zip');
 const net      = require('net');
 const { exec } = require('child_process');
 const {
@@ -460,11 +461,31 @@ app.post('/api/roms', requireAuth, requireAdmin, romUpload.single('rom'), (req, 
   const { system, name } = req.body;
   if (!system || !name || !req.file)
     return res.status(400).json({ error: 'system, name, and rom file are required' });
+
+  let filename = req.file.filename;
+  let size     = req.file.size;
+
   try {
-    const rom = createRom({ system, name, filename: req.file.filename, size: req.file.size });
+    if (req.file.originalname.toLowerCase().endsWith('.zip')) {
+      const zip     = new AdmZip(path.join(romsDir, filename));
+      const entries = zip.getEntries().filter(e => !e.isDirectory && !e.entryName.startsWith('__MACOSX'));
+      if (!entries.length) {
+        fs.unlink(path.join(romsDir, filename), () => {});
+        return res.status(400).json({ error: 'ZIP contains no files' });
+      }
+      const entry   = entries[0];
+      const ext     = path.extname(entry.entryName);
+      const outName = `${crypto.randomUUID()}${ext}`;
+      zip.extractEntryTo(entry, romsDir, false, true, false, outName);
+      fs.unlink(path.join(romsDir, filename), () => {});
+      filename = outName;
+      size     = entry.header.size;
+    }
+
+    const rom = createRom({ system, name, filename, size });
     res.status(201).json(rom);
   } catch (err) {
-    fs.unlink(path.join(romsDir, req.file.filename), () => {});
+    fs.unlink(path.join(romsDir, filename), () => {});
     res.status(400).json({ error: err.message });
   }
 });
