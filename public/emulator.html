@@ -83,29 +83,7 @@
       document.getElementById('emu-qsave').addEventListener('click', () => window.EJS_emulator.gameManager.quickSave(1));
       document.getElementById('emu-qload').addEventListener('click', () => window.EJS_emulator.gameManager.quickLoad(1));
 
-      // Disable mouse input on the game canvas while a gamepad is actively being used
-      let gpMouseTimeout = null;
-      let gpMouseActive  = false;
-      const game = document.getElementById('game');
-      const blockMouse = e => { if (gpMouseActive) e.stopImmediatePropagation(); };
-      ['mousedown','mouseup','mousemove','click'].forEach(t => game.addEventListener(t, blockMouse, true));
-      function checkGamepads() {
-        const gps = navigator.getGamepads ? navigator.getGamepads() : [];
-        let active = false;
-        for (const gp of gps) {
-          if (!gp) continue;
-          if (gp.buttons.some(b => b.pressed)) { active = true; break; }
-          if (gp.axes.some(a => Math.abs(a) > 0.2)) { active = true; break; }
-        }
-        if (active) {
-          gpMouseActive = true;
-          clearTimeout(gpMouseTimeout);
-          gpMouseTimeout = setTimeout(() => { gpMouseActive = false; }, 2000);
-        }
-      }
-      setInterval(checkGamepads, 50);
-
-      // Escape closes the emulator
+      // Escape closes the emulator (unless a settings panel is open)
       document.addEventListener('keydown', e => {
         if (e.key === 'Escape' && !document.querySelector('.ejs_menu, .ejs_settings')) window.close();
       });
@@ -116,7 +94,7 @@
       const game = document.getElementById('game');
       const blockMouse = e => { if (gpMouseActive) e.stopImmediatePropagation(); };
       ['mousedown', 'mouseup', 'mousemove', 'click'].forEach(t => game.addEventListener(t, blockMouse, true));
-      function checkGamepads() {
+      setInterval(() => {
         const gps = navigator.getGamepads ? navigator.getGamepads() : [];
         for (const gp of gps) {
           if (!gp) continue;
@@ -127,16 +105,14 @@
             return;
           }
         }
-      }
-      setInterval(checkGamepads, 50);
+      }, 50);
 
-      // Watch for settings panel: hide unwanted tabs and restore cursor while panel is open
+      // Watch for settings panel: hide unwanted tabs
       const observer = new MutationObserver(() => {
         document.querySelectorAll('.ejs_settings_main_bar > *, .ejs_setting_menu > *').forEach(el => {
           const txt = el.textContent.trim().toLowerCase();
           if (HIDDEN_TABS.some(t => txt.startsWith(t))) el.style.display = 'none';
         });
-        const panelOpen = !!document.querySelector('.ejs_menu, .ejs_settings');
       });
       observer.observe(document.body, { childList: true, subtree: true });
     };
