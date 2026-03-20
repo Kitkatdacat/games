@@ -1103,7 +1103,7 @@ async function renderAdminCatalog(query = '') {
 
   const searchEl = $id('admin-catalog-search');
   if (searchEl) {
-    searchEl.addEventListener('input', () => renderAdminCatalog(searchEl.value));
+    searchEl.addEventListener('input', debounce(() => renderAdminCatalog(searchEl.value), 300));
     searchEl.focus();
   }
 
@@ -1856,21 +1856,14 @@ async function renderEmulators() {
   const content = $id('emulators-content');
 
   if (!activeEmuSystem) {
-    // System selection grid
+    // System selection grid — render immediately with placeholder counts, populate after
     const isAdmin = currentUser?.role === 'admin';
-    let visibleSystems = EMULATOR_SYSTEMS;
-    let cachedRoms = [];
-    try {
-      cachedRoms = await api('GET', '/api/roms');
-      if (!isAdmin) {
-        const linkedRomIds = new Set(games.filter(g => g.rom_id).map(g => g.rom_id));
-        const linkedRoms = cachedRoms.filter(r => linkedRomIds.has(r.id));
-        const systemsWithRoms = new Set(linkedRoms.map(r => r.system));
-        visibleSystems = EMULATOR_SYSTEMS.filter(s => systemsWithRoms.has(s.id));
-      }
-    } catch {}
+    const linkedRomIds = new Set(games.filter(g => g.rom_id).map(g => g.rom_id));
+
+    // For non-admins, pre-filter to systems that have at least one linked ROM
+    // (we'll refine counts after the fetch; for now show all or none)
     content.innerHTML = `<div class="emu-systems-grid">${
-      visibleSystems.map(s => `
+      EMULATOR_SYSTEMS.map(s => `
         <button class="emu-system-card" data-system="${s.id}" data-s-card-neon="${s.neon}">
           <div class="emu-system-icon" data-s-bg="${s.color}">
             ${s.logo
@@ -1892,15 +1885,19 @@ async function renderEmulators() {
       card.addEventListener('click', () => { activeEmuSystem = card.dataset.system; renderEmulators(); });
     });
 
-    // Show linked ROM counts
-    const linkedRomIds = new Set(games.filter(g => g.rom_id).map(g => g.rom_id));
-    visibleSystems.forEach(s => {
-      const el = $id(`emu-count-${s.id}`);
-      if (el) {
-        const n = cachedRoms.filter(r => r.system === s.id && linkedRomIds.has(r.id)).length;
+    // Fetch ROM list in background — update counts and hide empty systems for non-admins
+    api('GET', '/api/roms').then(allRoms => {
+      const linkedRoms = allRoms.filter(r => linkedRomIds.has(r.id));
+      const systemsWithRoms = new Set(linkedRoms.map(r => r.system));
+      EMULATOR_SYSTEMS.forEach(s => {
+        const el = $id(`emu-count-${s.id}`);
+        const card = el?.closest('.emu-system-card');
+        if (!el || !card) return;
+        const n = linkedRoms.filter(r => r.system === s.id).length;
         el.textContent = n + ' game' + (n !== 1 ? 's' : '');
-      }
-    });
+        if (!isAdmin && !systemsWithRoms.has(s.id)) card.style.display = 'none';
+      });
+    }).catch(() => {});
 
   } else {
     // ROM list for selected system
