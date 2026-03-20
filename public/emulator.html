@@ -51,7 +51,10 @@
     // Disable RetroArch's gamepad menu-toggle combo so the ✕ button (or any combo)
     // doesn't accidentally open the menu and pause the game.
     // 0 = disabled, 1 = Start+Select, 2 = L+R+Start+Select, etc.
-    window.EJS_defaultOptions = { 'input_menu_toggle_gamepad_combo': '0' };
+    window.EJS_defaultOptions = {
+      'input_menu_toggle_gamepad_combo': '0',
+      'input_quit_gamepad_combo':        '0',
+    };
     window.EJS_Buttons = {
       playPause:     { visible: false },
       restart:       { visible: false },
@@ -69,7 +72,7 @@
       saveSavFiles:  { visible: false },
       loadSavFiles:  { visible: false },
       fullscreen:    { visible: true },
-      exitEmulation: { visible: true, callback: () => window.close() },
+      exitEmulation: { visible: true, callback: () => { if (confirm('Quit the emulator?')) window.close(); } },
       settings:      { visible: true },
     };
 
@@ -85,7 +88,9 @@
 
       // Escape closes the emulator (unless a settings panel is open)
       document.addEventListener('keydown', e => {
-        if (e.key === 'Escape' && !document.querySelector('.ejs_menu, .ejs_settings')) window.close();
+        if (e.key === 'Escape' && !document.querySelector('.ejs_menu, .ejs_settings')) {
+          if (confirm('Quit the emulator?')) window.close();
+        }
       });
 
       // Disable mouse input on the game canvas while a gamepad is actively being used
