@@ -34,23 +34,23 @@
 
       <!-- ── Nav Sidebar ── -->
       <nav id="nav-sidebar">
-        <button class="nav-item nav-item--active" data-view="home" id="nav-home" style="--ni:#00d8ff">
+        <button class="nav-item nav-item--active" data-view="home" id="nav-home">
           <svg class="nav-icon" viewBox="0 0 20 20" fill="none"><path d="M3 9.5L10 3l7 6.5V17a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9.5z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><path d="M7 18v-6h6v6" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg>
           <span class="nav-label">Home</span>
         </button>
-        <button class="nav-item" data-view="library" id="nav-library" style="--ni:#d0ff00">
+        <button class="nav-item" data-view="library" id="nav-library">
           <svg class="nav-icon" viewBox="0 0 20 20" fill="none"><rect x="2" y="3" width="7" height="9" rx="1" stroke="currentColor" stroke-width="1.5"/><rect x="11" y="3" width="7" height="5" rx="1" stroke="currentColor" stroke-width="1.5"/><rect x="11" y="10" width="7" height="7" rx="1" stroke="currentColor" stroke-width="1.5"/><rect x="2" y="14" width="7" height="3" rx="1" stroke="currentColor" stroke-width="1.5"/></svg>
           <span class="nav-label">My Library</span>
         </button>
-        <button class="nav-item" data-view="search" id="nav-search" style="--ni:#ff00e1">
+        <button class="nav-item" data-view="search" id="nav-search">
           <svg class="nav-icon" viewBox="0 0 20 20" fill="none"><circle cx="8.5" cy="8.5" r="5.5" stroke="currentColor" stroke-width="1.5"/><path d="M15 15l-3-3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
           <span class="nav-label">Browse</span>
         </button>
-        <button class="nav-item" data-view="emulators" id="nav-emulators" style="--ni:#00ff18">
+        <button class="nav-item" data-view="emulators" id="nav-emulators">
           <svg class="nav-icon" viewBox="0 0 20 20" fill="none"><rect x="2" y="5" width="16" height="11" rx="2.5" stroke="currentColor" stroke-width="1.5"/><path d="M7 10.5h2m-1-1v2M13 10.5h.01M15 10.5h.01" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
           <span class="nav-label">Emulators</span>
         </button>
-        <button class="nav-item" data-view="hosted" id="nav-hosted" style="--ni:#ff0000">
+        <button class="nav-item" data-view="hosted" id="nav-hosted">
           <svg class="nav-icon" viewBox="0 0 20 20" fill="none"><rect x="2" y="3" width="16" height="12" rx="2" stroke="currentColor" stroke-width="1.5"/><path d="M6 7h2M6 10h2M10 7h4M10 10h4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><path d="M7 15v2M13 15v2M5 17h10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
           <span class="nav-label">Hosted</span>
         </button>
@@ -86,12 +86,12 @@
             <div id="dd-color-picker" class="dd-color-picker hidden">
               <div class="dd-color-label">Profile Color</div>
               <div class="dd-color-swatches">
-                <button class="dd-swatch" data-color="#00d8ff" style="--sw:#00d8ff" title="Cyan"></button>
-                <button class="dd-swatch" data-color="#d0ff00" style="--sw:#d0ff00" title="Lime"></button>
-                <button class="dd-swatch" data-color="#ff00e1" style="--sw:#ff00e1" title="Magenta"></button>
-                <button class="dd-swatch" data-color="#00ff18" style="--sw:#00ff18" title="Green"></button>
-                <button class="dd-swatch" data-color="#ff0000" style="--sw:#ff0000" title="Red"></button>
-                <button class="dd-swatch" data-color="#ff8c00" style="--sw:#ff8c00" title="Orange"></button>
+                <button class="dd-swatch" data-color="#00d8ff" data-s-sw="#00d8ff" title="Cyan"></button>
+                <button class="dd-swatch" data-color="#d0ff00" data-s-sw="#d0ff00" title="Lime"></button>
+                <button class="dd-swatch" data-color="#ff00e1" data-s-sw="#ff00e1" title="Magenta"></button>
+                <button class="dd-swatch" data-color="#00ff18" data-s-sw="#00ff18" title="Green"></button>
+                <button class="dd-swatch" data-color="#ff0000" data-s-sw="#ff0000" title="Red"></button>
+                <button class="dd-swatch" data-color="#ff8c00" data-s-sw="#ff8c00" title="Orange"></button>
                 <button class="dd-swatch dd-swatch--rainbow" data-color="rainbow" title="All Colors"></button>
               </div>
             </div>
@@ -138,7 +138,7 @@
         <div class="view" data-view="library" id="view-library">
           <div class="view-inner">
             <div class="view-header">
-              <h2 class="view-title">My <span class="neon-letter" style="--nl:#00d8ff">L</span><span class="neon-letter" style="--nl:#d0ff00">I</span><span class="neon-letter" style="--nl:#ff00e1">B</span><span class="neon-letter" style="--nl:#00ff18">R</span><span class="neon-letter" style="--nl:#ff0000">A</span><span class="neon-letter" style="--nl:#ff8c00">R</span><span class="neon-letter" style="--nl:#00d8ff">Y</span></h2>
+              <h2 class="view-title">My <span class="neon-letter" data-s-nl="#00d8ff">L</span><span class="neon-letter" data-s-nl="#d0ff00">I</span><span class="neon-letter" data-s-nl="#ff00e1">B</span><span class="neon-letter" data-s-nl="#00ff18">R</span><span class="neon-letter" data-s-nl="#ff0000">A</span><span class="neon-letter" data-s-nl="#ff8c00">R</span><span class="neon-letter" data-s-nl="#00d8ff">Y</span></h2>
             </div>
             <div id="library-filter-tabs">
               <button class="lib-tab active" data-status="">All</button>
@@ -156,8 +156,8 @@
         <div class="view" data-view="search" id="view-search">
           <div class="view-inner">
             <div class="view-header">
-              <h2 class="view-title">Browse our <span class="neon-letter" style="--nl:#00d8ff">G</span><span class="neon-letter" style="--nl:#d0ff00">A</span><span class="neon-letter" style="--nl:#ff00e1">M</span><span class="neon-letter" style="--nl:#00ff18">E</span><span class="neon-letter" style="--nl:#ff8c00">S</span></h2>
-              <div class="search-wrap" style="margin-top:12px">
+              <h2 class="view-title">Browse our <span class="neon-letter" data-s-nl="#00d8ff">G</span><span class="neon-letter" data-s-nl="#d0ff00">A</span><span class="neon-letter" data-s-nl="#ff00e1">M</span><span class="neon-letter" data-s-nl="#00ff18">E</span><span class="neon-letter" data-s-nl="#ff8c00">S</span></h2>
+              <div class="search-wrap mt-12">
                 <svg class="search-icon" viewBox="0 0 20 20" fill="none"><circle cx="8.5" cy="8.5" r="5.5" stroke="#00d8ff" stroke-width="1.5"/><path d="M15 15l-3-3" stroke="#00d8ff" stroke-width="1.5" stroke-linecap="round"/></svg>
                 <input type="text" id="search-input" placeholder="Search games…" autocomplete="off" />
               </div>
@@ -174,7 +174,7 @@
         <div class="view" data-view="emulators" id="view-emulators">
           <div class="view-inner">
             <div class="view-header">
-              <h2 class="view-title"><span class="neon-letter" style="--nl:#00d8ff">E</span><span class="neon-letter" style="--nl:#d0ff00">M</span><span class="neon-letter" style="--nl:#ff00e1">U</span><span class="neon-letter" style="--nl:#00ff18">L</span><span class="neon-letter" style="--nl:#ff0000">A</span><span class="neon-letter" style="--nl:#ff8c00">T</span><span class="neon-letter" style="--nl:#00d8ff">O</span><span class="neon-letter" style="--nl:#d0ff00">R</span><span class="neon-letter" style="--nl:#ff00e1">S</span></h2>
+              <h2 class="view-title"><span class="neon-letter" data-s-nl="#00d8ff">E</span><span class="neon-letter" data-s-nl="#d0ff00">M</span><span class="neon-letter" data-s-nl="#ff00e1">U</span><span class="neon-letter" data-s-nl="#00ff18">L</span><span class="neon-letter" data-s-nl="#ff0000">A</span><span class="neon-letter" data-s-nl="#ff8c00">T</span><span class="neon-letter" data-s-nl="#00d8ff">O</span><span class="neon-letter" data-s-nl="#d0ff00">R</span><span class="neon-letter" data-s-nl="#ff00e1">S</span></h2>
             </div>
             <div id="emulators-content"></div>
           </div>
@@ -184,7 +184,7 @@
         <div class="view" data-view="hosted" id="view-hosted">
           <div class="view-inner">
             <div class="view-header">
-              <h2 class="view-title"><span class="neon-letter" style="--nl:#00d8ff">H</span><span class="neon-letter" style="--nl:#d0ff00">O</span><span class="neon-letter" style="--nl:#ff00e1">S</span><span class="neon-letter" style="--nl:#00ff18">T</span><span class="neon-letter" style="--nl:#ff0000">E</span><span class="neon-letter" style="--nl:#ff8c00">D</span> <span class="neon-letter" style="--nl:#00d8ff">S</span><span class="neon-letter" style="--nl:#d0ff00">E</span><span class="neon-letter" style="--nl:#ff00e1">R</span><span class="neon-letter" style="--nl:#00ff18">V</span><span class="neon-letter" style="--nl:#ff0000">E</span><span class="neon-letter" style="--nl:#ff8c00">R</span><span class="neon-letter" style="--nl:#00d8ff">S</span></h2>
+              <h2 class="view-title"><span class="neon-letter" data-s-nl="#00d8ff">H</span><span class="neon-letter" data-s-nl="#d0ff00">O</span><span class="neon-letter" data-s-nl="#ff00e1">S</span><span class="neon-letter" data-s-nl="#00ff18">T</span><span class="neon-letter" data-s-nl="#ff0000">E</span><span class="neon-letter" data-s-nl="#ff8c00">D</span> <span class="neon-letter" data-s-nl="#00d8ff">S</span><span class="neon-letter" data-s-nl="#d0ff00">E</span><span class="neon-letter" data-s-nl="#ff00e1">R</span><span class="neon-letter" data-s-nl="#00ff18">V</span><span class="neon-letter" data-s-nl="#ff0000">E</span><span class="neon-letter" data-s-nl="#ff8c00">R</span><span class="neon-letter" data-s-nl="#00d8ff">S</span></h2>
             </div>
             <div id="hosted-grid" class="hosted-grid"></div>
           </div>
@@ -194,7 +194,7 @@
         <div class="view" data-view="controls" id="view-controls">
           <div class="view-inner">
             <div class="view-header">
-              <h2 class="view-title"><span class="neon-letter" style="--nl:#bf00ff">C</span><span class="neon-letter" style="--nl:#00d8ff">O</span><span class="neon-letter" style="--nl:#d0ff00">N</span><span class="neon-letter" style="--nl:#ff00e1">T</span><span class="neon-letter" style="--nl:#00ff18">R</span><span class="neon-letter" style="--nl:#ff0000">O</span><span class="neon-letter" style="--nl:#ff8c00">L</span><span class="neon-letter" style="--nl:#bf00ff">S</span></h2>
+              <h2 class="view-title"><span class="neon-letter" data-s-nl="#bf00ff">C</span><span class="neon-letter" data-s-nl="#00d8ff">O</span><span class="neon-letter" data-s-nl="#d0ff00">N</span><span class="neon-letter" data-s-nl="#ff00e1">T</span><span class="neon-letter" data-s-nl="#00ff18">R</span><span class="neon-letter" data-s-nl="#ff0000">O</span><span class="neon-letter" data-s-nl="#ff8c00">L</span><span class="neon-letter" data-s-nl="#bf00ff">S</span></h2>
             </div>
             <div id="controls-content"></div>
           </div>
@@ -212,31 +212,31 @@
                 <p class="games-admin-subtitle">Manage the game catalog, genres, platforms, and hosted servers.</p>
               </div>
               <div class="games-admin-nav-grid">
-                <button class="games-admin-nav-card" data-atab="catalog" style="--card-neon:#00d8ff">
+                <button class="games-admin-nav-card" data-atab="catalog" data-s-card-neon="#00d8ff">
                   <span class="games-admin-nav-icon">&#9632;</span>
                   <span class="games-admin-nav-title">Catalog</span>
                   <span class="games-admin-nav-desc">Browse and manage all games in the library</span>
                   <span class="games-admin-nav-arrow">&#8594;</span>
                 </button>
-                <button class="games-admin-nav-card" data-atab="add-game" style="--card-neon:#d0ff00">
+                <button class="games-admin-nav-card" data-atab="add-game" data-s-card-neon="#d0ff00">
                   <span class="games-admin-nav-icon">&#9632;</span>
                   <span class="games-admin-nav-title">Add Game</span>
                   <span class="games-admin-nav-desc">Add a new game manually or fetch from RAWG</span>
                   <span class="games-admin-nav-arrow">&#8594;</span>
                 </button>
-                <button class="games-admin-nav-card" data-atab="genres" style="--card-neon:#ff00e1">
+                <button class="games-admin-nav-card" data-atab="genres" data-s-card-neon="#ff00e1">
                   <span class="games-admin-nav-icon">&#9632;</span>
                   <span class="games-admin-nav-title">Genres</span>
                   <span class="games-admin-nav-desc">Add and remove genre tags for filtering</span>
                   <span class="games-admin-nav-arrow">&#8594;</span>
                 </button>
-                <button class="games-admin-nav-card" data-atab="platforms" style="--card-neon:#00ff18">
+                <button class="games-admin-nav-card" data-atab="platforms" data-s-card-neon="#00ff18">
                   <span class="games-admin-nav-icon">&#9632;</span>
                   <span class="games-admin-nav-title">Platforms</span>
                   <span class="games-admin-nav-desc">Manage platform tags used across the catalog</span>
                   <span class="games-admin-nav-arrow">&#8594;</span>
                 </button>
-                <button class="games-admin-nav-card" data-atab="hosted-servers" style="--card-neon:#ff8c00">
+                <button class="games-admin-nav-card" data-atab="hosted-servers" data-s-card-neon="#ff8c00">
                   <span class="games-admin-nav-icon">&#9632;</span>
                   <span class="games-admin-nav-title">Hosted Servers</span>
                   <span class="games-admin-nav-desc">Configure and manage multiplayer game servers</span>
@@ -273,15 +273,15 @@
               </div>
               <div id="admin-tab-hosted-servers" class="admin-tab-panel hidden">
                 <div id="admin-hosted-list"></div>
-                <div class="admin-add-row" style="flex-wrap:wrap;gap:8px">
+                <div class="admin-add-row admin-add-row--wrap">
                   <input type="text" id="hosted-name-input" placeholder="Server name…" />
-                  <input type="text" id="hosted-host-input" placeholder="Host / IP…" style="width:130px" />
-                  <input type="number" id="hosted-port-input" placeholder="Port" style="width:70px" value="25565" />
-                  <input type="text" id="hosted-start-input" placeholder="Start command…" style="width:170px" />
-                  <input type="text" id="hosted-stop-input" placeholder="Stop command…" style="width:170px" />
-                  <input type="text" id="hosted-desc-input" placeholder="Description (optional)…" style="width:170px" />
-                  <input type="text" id="hosted-image-input" placeholder="Image path (e.g. img/servers/vanilla.jpg)…" style="width:230px" />
-                  <input type="text" id="hosted-config-input" placeholder="server.properties path (absolute)…" style="width:250px" />
+                  <input type="text" id="hosted-host-input" placeholder="Host / IP…" />
+                  <input type="number" id="hosted-port-input" placeholder="Port" value="25565" />
+                  <input type="text" id="hosted-start-input" placeholder="Start command…" />
+                  <input type="text" id="hosted-stop-input" placeholder="Stop command…" />
+                  <input type="text" id="hosted-desc-input" placeholder="Description (optional)…" />
+                  <input type="text" id="hosted-image-input" placeholder="Image path (e.g. img/servers/vanilla.jpg)…" />
+                  <input type="text" id="hosted-config-input" placeholder="server.properties path (absolute)…" />
                   <button class="btn btn-accent" id="hosted-add-btn">Add</button>
                 </div>
               </div>
@@ -323,7 +323,7 @@
         <div class="modal-controls-col">
           <div class="modal-play-top">
             <button class="btn-modal-play" id="modal-play-btn">
-              <span style="color:#00d8ff;text-shadow:0 0 10px #00d8ff">P</span><span style="color:#d0ff00;text-shadow:0 0 10px #d0ff00">l</span><span style="color:#ff00e1;text-shadow:0 0 10px #ff00e1">a</span><span style="color:#00ff18;text-shadow:0 0 10px #00ff18">y</span><span style="color:#ff0000;text-shadow:0 0 10px #ff0000">G</span><span style="color:#bf00ff;text-shadow:0 0 10px #bf00ff">a</span><span style="color:#ff6a00;text-shadow:0 0 10px #ff6a00">m</span><span style="color:#00ffff;text-shadow:0 0 10px #00ffff">e</span>
+              <span data-s-nl="#00d8ff">P</span><span data-s-nl="#d0ff00">l</span><span data-s-nl="#ff00e1">a</span><span data-s-nl="#00ff18">y</span><span data-s-nl="#ff0000">G</span><span data-s-nl="#bf00ff">a</span><span data-s-nl="#ff6a00">m</span><span data-s-nl="#00ffff">e</span>
             </button>
             <div id="modal-session-controls"></div>
           </div>
@@ -335,8 +335,8 @@
                 <label>Your Review</label>
                 <textarea id="modal-review-body" rows="3" placeholder="Write a review…"></textarea>
               </div>
-              <div class="star-rating" id="modal-review-stars" style="justify-content:center;margin:12px 0"></div>
-              <div style="display:flex;gap:8px;justify-content:center">
+              <div class="star-rating star-rating-center" id="modal-review-stars"></div>
+              <div class="flex-center-gap">
                 <button class="btn btn-accent btn-sm" id="modal-review-submit">Post Review</button>
                 <button class="btn btn-danger btn-sm hidden" id="modal-review-delete">Delete Review</button>
               </div>

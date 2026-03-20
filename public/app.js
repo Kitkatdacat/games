@@ -101,6 +101,30 @@ function debounce(fn, ms) {
 
 function $id(id) { return document.getElementById(id); }
 
+// ── applyDataStyles ────────────────────────────────────────────────────────────
+// Converts data-s-* attributes to inline style properties (CSP-safe DOM assignment)
+
+function applyDataStyles(root) {
+  const each = (attr, fn) => {
+    if (root.hasAttribute && root.hasAttribute(`data-s-${attr}`)) {
+      fn(root, root.getAttribute(`data-s-${attr}`));
+      root.removeAttribute(`data-s-${attr}`);
+    }
+    root.querySelectorAll(`[data-s-${attr}]`).forEach(el => {
+      fn(el, el.getAttribute(`data-s-${attr}`));
+      el.removeAttribute(`data-s-${attr}`);
+    });
+  };
+  [['nl','--nl'],['sw','--sw'],['dc','--dc'],['sc','--sc'],['ct','--ct'],
+   ['card-neon','--card-neon'],['sys-neon','--sys-neon']].forEach(([attr, prop]) => {
+    each(attr, (el, v) => el.style.setProperty(prop, v));
+  });
+  each('bg',      (el, v) => { el.style.background = v; });
+  each('bg-img',  (el, v) => { el.style.backgroundImage = `url('${v}')`; });
+  each('border',  (el, v) => { el.style.borderColor = v; });
+  each('color',   (el, v) => { el.style.color = v; });
+}
+
 // ── Theme ─────────────────────────────────────────────────────────────────────
 
 function applyTheme(t) {
@@ -125,6 +149,7 @@ async function loadApp() {
   setUserChip();
   $id('auth-screen').classList.add('hidden');
   $id('app').classList.remove('hidden');
+  applyDataStyles(document.body);
 
   if (currentUser.role === 'admin') {
     $id('dd-admin').classList.remove('hidden');
@@ -185,12 +210,15 @@ async function refreshDropdownStats() {
     let _ni = 0;
     const n = v => {
       const color = _isRainbow ? _neons[_ni++ % _neons.length] : 'var(--profile-neon,#ff8c00)';
-      return `<span style="color:${color};font-weight:700">${v}</span>`;
+      return `<span class="dd-stat-val" data-s-color="${color}">${v}</span>`;
     };
-    if (el) el.innerHTML =
-      `<div>${n(stats.total)} game${stats.total !== 1 ? 's' : ''} in library</div>` +
-      `<div>${n(formatPlaytime(stats.totalPlaytimeMin))} played</div>` +
-      `<div>${n(stats.byStatus.playing || 0)} playing · ${n(stats.byStatus.completed || 0)} completed</div>`;
+    if (el) {
+      el.innerHTML =
+        `<div>${n(stats.total)} game${stats.total !== 1 ? 's' : ''} in library</div>` +
+        `<div>${n(formatPlaytime(stats.totalPlaytimeMin))} played</div>` +
+        `<div>${n(stats.byStatus.playing || 0)} playing · ${n(stats.byStatus.completed || 0)} completed</div>`;
+      applyDataStyles(el);
+    }
   } catch {}
 }
 
@@ -301,9 +329,11 @@ function renderHero() {
 }
 
 function renderHeroDots() {
-  $id('hero-dots').innerHTML = heroGames.map((_, i) =>
-    `<button class="hero-dot${i === 0 ? ' active' : ''}" data-i="${i}" style="--dc:${heroDotColors[i % heroDotColors.length]}"></button>`
+  const el = $id('hero-dots');
+  el.innerHTML = heroGames.map((_, i) =>
+    `<button class="hero-dot${i === 0 ? ' active' : ''}" data-i="${i}" data-s-dc="${heroDotColors[i % heroDotColors.length]}"></button>`
   ).join('');
+  applyDataStyles(el);
 }
 
 function setHeroSlide(i) {
@@ -425,6 +455,8 @@ function renderHome() {
     colorIdx++;
   }
 
+  applyDataStyles(container);
+
   // Attach shelf scroll arrow events
   container.querySelectorAll('.shelf-arrow').forEach(btn => {
     btn.addEventListener('click', () => {
@@ -467,13 +499,13 @@ function renderShelf(id, label, list, color = '#00d8ff', total = list.length) {
   return `
     <section class="shelf" id="shelf-${id}">
       <div class="shelf-header">
-        <h2 class="shelf-title" style="color:${color}">${esc(label)}</h2>
+        <h2 class="shelf-title" data-s-color="${color}">${esc(label)}</h2>
         ${total > 15 ? '<button class="shelf-see-all">See All</button>' : ''}
       </div>
       <div class="shelf-track" id="shelf-track-${id}">
-        <button class="shelf-arrow shelf-arrow--left" style="--sc:${color}">&#8249;</button>
+        <button class="shelf-arrow shelf-arrow--left" data-s-sc="${color}">&#8249;</button>
         ${list.map(renderGameCard).join('')}
-        <button class="shelf-arrow shelf-arrow--right" style="--sc:${color}">&#8250;</button>
+        <button class="shelf-arrow shelf-arrow--right" data-s-sc="${color}">&#8250;</button>
       </div>
     </section>`;
 }
@@ -484,16 +516,15 @@ function renderGameCard(g, showStatus = false, showLibBtn = false) {
   const status  = showStatus ? (g.libraryEntry?.status || g.status || '') : '';
   const inLib   = !!g.libraryEntry;
   const mc      = g.metacritic;
-  const chips   = (g.platforms || []).slice(0, 2).map(p => `<span class="chip" style="font-size:9px">${esc(p)}</span>`).join('');
+  const chips   = (g.platforms || []).slice(0, 2).map(p => `<span class="chip chip-xs">${esc(p)}</span>`).join('');
   const mcBadge = mc ? `<span class="game-card-mc ${mcColor(mc)}">${mc}</span>` : '';
   const badge   = status ? `<div class="game-card-badge">${esc(statusLabel(status))}</div>` : '';
   const libBtn  = showLibBtn ? `<button class="card-lib-btn${inLib ? ' in-library' : ''}" data-lib="${esc(g.id)}">${inLib ? '— Remove' : '+ Add'}</button>` : '';
-  const style   = g.cover_url
-    ? `background-image:url('${g.cover_url.replace(/'/g, '%27')}')`
-    : 'background:linear-gradient(135deg,var(--surface-2),var(--surface-3))';
+  const coverAttr = g.cover_url ? ` data-s-bg-img="${g.cover_url.replace(/'/g, '%27')}"` : '';
+  const noCoverCls = g.cover_url ? '' : ' game-card--no-cover';
 
   return `
-    <div class="game-card${status ? ' status-' + status : ''}" data-id="${esc(g.id)}" style="${style}">
+    <div class="game-card${status ? ' status-' + status : ''}${noCoverCls}" data-id="${esc(g.id)}"${coverAttr}>
       ${libBtn}
       ${badge}
       ${mcBadge ? `<div class="game-card-mc-corner">${mcBadge}</div>` : ''}
@@ -547,12 +578,13 @@ function renderLibrary() {
     grid.innerHTML = `<div class="empty-state"><strong>Nothing here yet.</strong><p>Add games to your library from the home screen or Browse.</p></div>`;
   } else {
     grid.innerHTML = filtered.map(g => renderGameCard(g, true)).join('');
+    applyDataStyles(grid);
     attachCardClicks(grid);
   }
 
   const total = games.filter(g => g.libraryEntry).length;
   $id('library-stats-bar').innerHTML = total
-    ? `<span style="color:#00d8ff;text-shadow:0 0 8px #00d8ff;font-size:18px;font-weight:700">${total}</span> <span class="stats-label">game${total !== 1 ? 's' : ''} in your library</span>`
+    ? `<span class="lib-count">${total}</span> <span class="stats-label">game${total !== 1 ? 's' : ''} in your library</span>`
     : '<span class="stats-label">Your library is empty.</span>';
 }
 
@@ -599,6 +631,7 @@ function applySearchFilter() {
     grid.innerHTML = `<div class="empty-state"><strong>No games found.</strong><p>Try different filters or add games via the Admin panel.</p></div>`;
   } else {
     grid.innerHTML = result.map(g => renderGameCard(g, false, true)).join('');
+    applyDataStyles(grid);
     attachCardClicks(grid);
   }
 }
@@ -674,7 +707,7 @@ function renderModalInfo(game) {
     game.release_year ? `<span class="modal-meta-item">${game.release_year}</span>` : '',
     game.publisher && game.publisher !== game.developer ? `<span class="modal-meta-item">${esc(game.publisher)}</span>` : '',
     game.rating_esrb  ? `<span class="chip">${esc(game.rating_esrb)}</span>` : '',
-  ].filter(Boolean).join('<span class="modal-meta-item" style="color:var(--border)">·</span>');
+  ].filter(Boolean).join('<span class="modal-meta-item meta-sep">·</span>');
   const _metaLine2 = game.developer ? `<span class="modal-meta-item modal-meta-dev">by ${esc(game.developer)}</span>` : '';
   $id('modal-meta-row').innerHTML = [_metaLine1, _metaLine2].filter(Boolean).join('<br>');
 
@@ -705,7 +738,7 @@ function renderReviewStars(container, rating) {
   activeReviewRating = rating || 0;
 
   container.innerHTML = Array.from({ length: 5 }, (_, i) =>
-    `<button type="button" class="star-btn" data-n="${i + 1}" style="background:none;border:none;font-size:24px;cursor:pointer;padding:0 3px;line-height:1">★</button>`
+    `<button type="button" class="star-btn" data-n="${i + 1}">★</button>`
   ).join('');
 
   const btns = Array.from(container.querySelectorAll('.star-btn'));
@@ -749,11 +782,11 @@ async function renderReviews(gameId) {
     <div class="review-item">
       <div class="review-header">
         <span class="review-author">${esc(r.username)}</span>
-        <span class="review-stars"><span style="color:#d0ff00;text-shadow:0 0 4px #d0ff00">${'★'.repeat(r.rating)}</span><span style="color:rgba(255,255,255,0.5)">${'☆'.repeat(5 - r.rating)}</span></span>
+        <span class="review-stars"><span class="review-stars-filled">${'★'.repeat(r.rating)}</span><span class="review-stars-empty">${'☆'.repeat(5 - r.rating)}</span></span>
         <span class="review-date">${timeAgo(r.created_at)}</span>
       </div>
       <div class="review-body">${esc(r.body)}</div>
-    </div>`).join('') : `<p style="color:#fff;font-size:12px;margin-bottom:12px">No reviews yet.</p>`;
+    </div>`).join('') : `<p class="no-reviews-msg">No reviews yet.</p>`;
 
   // Pre-fill form if user already reviewed
   renderReviewStars($id('modal-review-stars'), mine?.rating || 0);
@@ -826,6 +859,7 @@ function updateCardInDOM(game) {
     const newCard = document.createElement('div');
     newCard.innerHTML = renderGameCard(game);
     const newEl = newCard.firstElementChild;
+    applyDataStyles(newEl);
     parent.replaceChild(newEl, card);
     newEl.addEventListener('click', () => openDetailModal(game.id));
   });
@@ -852,7 +886,7 @@ async function loadModalPlaytime(game) {
     ctrl.innerHTML = `
       <div class="session-active">
         <div class="session-active-dot"></div>
-        <span style="font-size:12px;flex:1">Session in progress…</span>
+        <span class="session-progress">Session in progress…</span>
         <button class="btn btn-accent btn-sm" id="end-session-btn">End Session</button>
       </div>`;
     $id('end-session-btn').onclick = () => endActiveSession(game.id);
@@ -1031,8 +1065,8 @@ function renderAdminCatalog(query = '') {
 
   wrap.innerHTML = `
     <div class="catalog-toolbar">
-      <input id="admin-catalog-search" class="admin-catalog-search" type="search" placeholder="Search games…"
-        value="${esc(query)}" style="flex:1" />
+      <input id="admin-catalog-search" class="admin-catalog-search flex-1" type="search" placeholder="Search games…"
+        value="${esc(query)}" />
       <button class="btn btn-danger btn-sm catalog-delete-selected hidden" id="catalog-delete-selected">
         Delete Selected (<span id="catalog-selected-count">0</span>)
       </button>
@@ -1053,9 +1087,9 @@ function renderAdminCatalog(query = '') {
             <td>${g.release_year || '—'}</td>
             <td>${(g.platforms||[]).slice(0,2).join(', ') || '—'}</td>
             <td>${g.metacritic || '—'}</td>
-            <td style="white-space:nowrap">
+            <td class="nowrap">
               <button class="btn btn-ghost btn-sm" data-edit="${esc(g.id)}">Edit</button>
-              <button class="btn btn-danger btn-sm" data-del="${esc(g.id)}" style="margin-left:4px">Del</button>
+              <button class="btn btn-danger btn-sm ml-4" data-del="${esc(g.id)}">Del</button>
             </td>
           </tr>`
         ).join('')}
@@ -1140,7 +1174,7 @@ function renderGameForm(gameId) {
   const arr = k => (game?.[k] || []).join(', ');
 
   $id('admin-game-form').innerHTML = `
-    <h3 style="margin-bottom:20px;font-size:16px">${game ? 'Edit' : 'Add'} Game</h3>
+    <h3 class="form-heading">${game ? 'Edit' : 'Add'} Game</h3>
 
     <div class="gf-rom-upload-box">
       <div class="gf-rom-upload-title">ROM Upload</div>
@@ -1151,12 +1185,12 @@ function renderGameForm(gameId) {
         </select>
         <input id="gf-rom-name" class="gf-rom-name-input" placeholder="ROM name…" />
       </div>
-      <div class="gf-rom-upload-row" style="margin-top:8px">
+      <div class="gf-rom-upload-row mt-8">
         <label class="gf-rom-file-label" for="gf-rom-file">
           <svg viewBox="0 0 20 20" fill="none" width="16" height="16"><path d="M10 3v10M6 7l4-4 4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M3 17h14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
           Choose ROM
         </label>
-        <input type="file" id="gf-rom-file" style="display:none" />
+        <input type="file" id="gf-rom-file" class="hidden" />
         <span id="gf-rom-filename" class="gf-rom-filename">No file chosen</span>
         <button class="btn btn-sub-neon btn-sm" id="gf-rom-upload-btn">Upload</button>
       </div>
@@ -1170,7 +1204,7 @@ function renderGameForm(gameId) {
           <svg viewBox="0 0 20 20" fill="none" width="20" height="20"><path d="M10 3v10M6 7l4-4 4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M3 17h14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
           Cover Image
         </label>
-        <input type="file" id="gf-cover-file" accept="image/*" style="display:none" />
+        <input type="file" id="gf-cover-file" accept="image/*" class="hidden" />
         <div class="gf-upload-status" id="gf-cover-status"></div>
       </div>
       <div class="gf-upload-box" id="gf-hero-upload-box">
@@ -1179,7 +1213,7 @@ function renderGameForm(gameId) {
           <svg viewBox="0 0 20 20" fill="none" width="20" height="20"><path d="M10 3v10M6 7l4-4 4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M3 17h14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
           Hero / Banner
         </label>
-        <input type="file" id="gf-hero-file" accept="image/*" style="display:none" />
+        <input type="file" id="gf-hero-file" accept="image/*" class="hidden" />
         <div class="gf-upload-status" id="gf-hero-status"></div>
       </div>
     </div>
@@ -1188,7 +1222,7 @@ function renderGameForm(gameId) {
       <div class="gf-search-source-row">
         <button class="gf-source-btn active" data-source="rawg">RAWG</button>
         <button class="gf-source-btn" data-source="igdb">IGDB</button>
-        <select id="gf-igdb-platform" class="gf-rom-select" style="display:none;font-size:12px;padding:5px 10px">
+        <select id="gf-igdb-platform" class="gf-rom-select hidden">
           <option value="18">NES</option>
           <option value="19">SNES</option>
           <option value="4">N64</option>
@@ -1197,8 +1231,8 @@ function renderGameForm(gameId) {
           <option value="">All Platforms</option>
         </select>
       </div>
-      <div style="display:flex;gap:8px;margin-top:8px">
-        <input id="gf-rawg-search" class="admin-catalog-search" placeholder="Search to auto-fill…" style="flex:1" />
+      <div class="flex-row-mt8">
+        <input id="gf-rawg-search" class="admin-catalog-search flex-1" placeholder="Search to auto-fill…" />
         <button class="btn btn-sub-neon" id="gf-rawg-btn">Search</button>
       </div>
     </div>
@@ -1236,11 +1270,11 @@ function renderGameForm(gameId) {
     <div class="field-wrap"><label>Linked ROM (for Play button)</label>
       <select id="gf-rom"><option value="">— None —</option></select>
     </div>
-    <div style="display:flex;gap:10px;margin-top:20px">
+    <div class="flex-row-mt20">
       <button class="btn btn-sub-neon" id="gf-save">${game ? 'Save Changes' : 'Add Game'}</button>
       ${game ? '<button class="btn btn-ghost" id="gf-cancel">Cancel</button>' : ''}
     </div>
-    <div id="gf-error" class="field-error hidden" style="margin-top:8px"></div>`;
+    <div id="gf-error" class="field-error hidden mt-8"></div>`;
 
   $id('gf-save').onclick = saveGameForm;
   if ($id('gf-cancel')) $id('gf-cancel').onclick = async () => { await cleanupPendingRom(); switchAdminTab('catalog'); };
@@ -1372,7 +1406,7 @@ function renderGameForm(gameId) {
           });
           searchSource = 'igdb';
           const platformSel = $id('gf-igdb-platform');
-          if (platformSel) { platformSel.value = igdbPlatform; platformSel.style.display = ''; }
+          if (platformSel) { platformSel.value = igdbPlatform; platformSel.classList.remove('hidden'); }
           $id('gf-rawg-search').value = cleanedName;
           gfDoSearch();
         }
@@ -1412,7 +1446,7 @@ function renderGameForm(gameId) {
         searchSource = btn.dataset.source;
         document.querySelectorAll('.gf-source-btn').forEach(b => b.classList.toggle('active', b === btn));
         const platformSel = $id('gf-igdb-platform');
-        if (platformSel) platformSel.style.display = searchSource === 'igdb' ? '' : 'none';
+        if (platformSel) platformSel.classList.toggle('hidden', searchSource !== 'igdb');
         $id('gf-rawg-search').placeholder = searchSource === 'igdb' ? 'Search IGDB to auto-fill…' : 'Search RAWG to auto-fill…';
       });
     });
@@ -1421,7 +1455,7 @@ function renderGameForm(gameId) {
       const q = $id('gf-rawg-search').value.trim();
       if (!q) return;
       const resultsEl = $id('gf-rawg-results');
-      resultsEl.innerHTML = '<span style="color:var(--text-3);font-size:12px">Searching…</span>';
+      resultsEl.innerHTML = '<span class="muted-sm">Searching…</span>';
 
       try {
         let results, source;
@@ -1548,7 +1582,7 @@ function renderGameForm(gameId) {
           };
         });
       } catch (err) {
-        resultsEl.innerHTML = `<span style="color:#ff4444;font-size:12px">${esc(err.message)}</span>`;
+        resultsEl.innerHTML = `<span class="error-sm">${esc(err.message)}</span>`;
       }
     };
     $id('gf-rawg-btn').onclick = gfDoSearch;
@@ -1804,21 +1838,22 @@ async function renderEmulators() {
     // System selection grid
     content.innerHTML = `<div class="emu-systems-grid">${
       EMULATOR_SYSTEMS.map(s => `
-        <button class="emu-system-card" data-system="${s.id}" style="--card-neon:${s.neon}">
-          <div class="emu-system-icon" style="background:${s.color}">
+        <button class="emu-system-card" data-system="${s.id}" data-s-card-neon="${s.neon}">
+          <div class="emu-system-icon" data-s-bg="${s.color}">
             ${s.logo
-              ? `<img src="${esc(s.logo)}" alt="${esc(s.name)}" style="width:80%;height:80%;object-fit:contain;">`
+              ? `<img src="${esc(s.logo)}" alt="${esc(s.name)}" class="emu-icon-img">`
               : `<svg viewBox="0 0 24 24" fill="none" width="36" height="36">
                   <rect x="2" y="6" width="20" height="14" rx="3" stroke="white" stroke-width="1.5"/>
                   <path d="M8 13h2m-1-1v2M15 13h.01M17 13h.01" stroke="white" stroke-width="2" stroke-linecap="round"/>
                 </svg>`
             }
           </div>
-          <div class="emu-system-name" style="color:#fff;text-shadow:0 0 4px #fff,0 0 10px ${s.neon},0 0 24px ${s.neon},0 0 48px ${s.neon}88;">${esc(s.name)}</div>
+          <div class="emu-system-name">${esc(s.name)}</div>
           <div class="emu-system-count" id="emu-count-${s.id}">—</div>
         </button>`
       ).join('')
     }</div>`;
+    applyDataStyles(content);
 
     content.querySelectorAll('.emu-system-card').forEach(card => {
       card.addEventListener('click', () => { activeEmuSystem = card.dataset.system; renderEmulators(); });
@@ -1843,17 +1878,17 @@ async function renderEmulators() {
     const isAdmin = currentUser?.role === 'admin';
 
     content.innerHTML = `
-      <div class="emu-system-hero" style="--sys-neon:${sys?.neon || '#00d8ff'}">
+      <div class="emu-system-hero" data-s-sys-neon="${sys?.neon || '#00d8ff'}">
         <button class="btn btn-ghost btn-sm emu-back-btn" id="emu-back">← Back</button>
-        <h2 class="emu-system-hero-title" style="color:${sys?.neon || '#00d8ff'};text-shadow:0 0 16px ${sys?.neon || '#00d8ff'}">${esc(sys?.name || activeEmuSystem)}</h2>
+        <h2 class="emu-system-hero-title">${esc(sys?.name || activeEmuSystem)}</h2>
         <p class="emu-system-hero-desc">${esc(sys?.desc || '')}</p>
-        <div class="emu-system-hero-meta" style="color:${sys?.neon || '#00d8ff'}">${emuRoms.length} ROM${emuRoms.length !== 1 ? 's' : ''} available</div>
+        <div class="emu-system-hero-meta">${emuRoms.length} ROM${emuRoms.length !== 1 ? 's' : ''} available</div>
       </div>
       <div id="emu-rom-list">${
         !emuRoms.length
           ? `<div class="empty-state"><strong>No ROMs yet.</strong>${isAdmin ? '<p>Upload a ROM file to get started.</p>' : ''}</div>`
           : emuRoms.map(rom => `
-              <div class="emu-rom-item" data-rom-id="${esc(rom.id)}" style="cursor:pointer">
+              <div class="emu-rom-item" data-rom-id="${esc(rom.id)}">
                 <div class="emu-rom-icon">
                   <svg viewBox="0 0 20 20" fill="none" width="18" height="18"><rect x="3" y="4" width="14" height="12" rx="2" stroke="currentColor" stroke-width="1.5"/><path d="M7 8h6M7 11h4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
                 </div>
@@ -1867,6 +1902,7 @@ async function renderEmulators() {
               </div>`
           ).join('')
       }</div>`;
+    applyDataStyles(content);
 
     $id('emu-back').addEventListener('click', () => { activeEmuSystem = null; renderEmulators(); });
 
@@ -1963,7 +1999,7 @@ async function renderHosted() {
 
   grid.innerHTML = hostedServers.map(s => `
     <div class="server-tile${s.online ? ' server-tile--online' : ''}" data-id="${esc(s.id)}">
-      <div class="server-tile-bg" ${s.image ? `style="background-image:url('${esc(s.image)}')"` : ''}></div>
+      <div class="server-tile-bg"${s.image ? ` data-s-bg-img="${esc(s.image)}"` : ''}></div>
       <div class="server-tile-scrim"></div>
       <div class="server-tile-body">
         <div class="server-tile-info">
@@ -1982,13 +2018,14 @@ async function renderHosted() {
             <img src="img/servers/${s.online ? 'power-on' : 'power-off'}.svg" alt="${s.online ? 'Stop' : 'Start'}">
             <span>${s.online ? 'Running' : 'Stopped'}</span>
           </button>
-          <button class="server-tile-cfg-btn" data-id="${esc(s.id)}" style="${s.config_path ? '' : 'display:none'}">⚙ Settings</button>
+          <button class="server-tile-cfg-btn${s.config_path ? '' : ' hidden'}" data-id="${esc(s.id)}">⚙ Settings</button>
           ` : ''}
         </div>
       </div>
       ${isAdmin && s.config_path ? `<div class="server-tile-cfg hidden" data-cfg-id="${esc(s.id)}"><div class="server-cfg-loading">Loading settings…</div></div>` : ''}
     </div>
   `).join('');
+  applyDataStyles(grid);
 
   // Power button handlers
   if (isAdmin) {
@@ -2112,17 +2149,17 @@ async function renderAdminHosted() {
     return;
   }
   list.innerHTML = `<div class="admin-lookup-list">${servers.map(s => `
-    <div class="admin-lookup-item" style="flex-direction:column;align-items:flex-start;gap:2px">
-      <div style="display:flex;align-items:center;gap:8px;width:100%">
+    <div class="admin-lookup-item col-start">
+      <div class="flex-row-full">
         <strong>${esc(s.name)}</strong>
-        <span style="color:var(--text-3);font-size:11px">${esc(s.host)}:${s.port}</span>
-        <span style="margin-left:auto;color:${s.online ? 'var(--accent)' : 'var(--text-3)'};">${s.online ? '● Online' : '○ Offline'}</span>
+        <span class="muted-xs">${esc(s.host)}:${s.port}</span>
+        <span class="ml-auto ${s.online ? 'server-online' : 'server-offline'}">${s.online ? '● Online' : '○ Offline'}</span>
         <button class="admin-lookup-delete" data-id="${esc(s.id)}" title="Delete">×</button>
       </div>
-      ${s.description ? `<div style="font-size:11px;color:var(--text-3)">${esc(s.description)}</div>` : ''}
-      <div style="font-size:11px;color:var(--text-3)">Start: <code>${esc(s.start_command || '—')}</code> &nbsp; Stop: <code>${esc(s.stop_command || '—')}</code></div>
-      ${s.config_path ? `<div style="font-size:11px;color:var(--text-3)">Config: <code>${esc(s.config_path)}</code></div>` : ''}
-      ${s.image ? `<div style="font-size:11px;color:var(--text-3)">Image: <code>${esc(s.image)}</code></div>` : ''}
+      ${s.description ? `<div class="admin-server-meta">${esc(s.description)}</div>` : ''}
+      <div class="admin-server-meta">Start: <code>${esc(s.start_command || '—')}</code> &nbsp; Stop: <code>${esc(s.stop_command || '—')}</code></div>
+      ${s.config_path ? `<div class="admin-server-meta">Config: <code>${esc(s.config_path)}</code></div>` : ''}
+      ${s.image ? `<div class="admin-server-meta">Image: <code>${esc(s.image)}</code></div>` : ''}
     </div>
   `).join('')}</div>`;
   list.querySelectorAll('.admin-lookup-delete').forEach(btn => {
@@ -2204,12 +2241,13 @@ async function captureInput(neon, btnLabel) {
     const overlay = document.createElement('div');
     overlay.className = 'ctrl-capture-overlay';
     overlay.innerHTML = `
-      <div class="ctrl-capture-box" style="border-color:${neon};color:${neon}">
+      <div class="ctrl-capture-box" data-s-border="${neon}" data-s-color="${neon}">
         <div class="ctrl-capture-label">${esc(btnLabel)}</div>
         <div class="ctrl-capture-hint">Press any key or controller button…</div>
         <button class="btn btn-sm ctrl-capture-cancel">Cancel</button>
       </div>`;
     document.body.appendChild(overlay);
+    applyDataStyles(overlay);
 
     let done = false;
     const finish = result => {
@@ -2263,11 +2301,11 @@ function buildDualSenseSVG(systemId) {
     const stroke = btnColor || neon;
     const mapping = cfg[id]; // custom remap stored by ds-id
     const mapDisplay = mapping ? keyLabel(mapping) : '';
-    return `<g class="ds-btn-g" data-id="${id}" data-label="${esc(dsLabel)}" style="cursor:pointer">
+    return `<g class="ds-btn-g" data-id="${id}" data-label="${esc(dsLabel)}" cursor="pointer">
       ${shapeStr.replace('FILL', fill).replace('STROKE', stroke)}
-      <text text-anchor="middle" dominant-baseline="middle" font-family="monospace,sans-serif" style="pointer-events:none"
+      <text text-anchor="middle" dominant-baseline="middle" font-family="monospace,sans-serif" pointer-events="none"
         x="${cx}" y="${cy - (actionLabel ? 3 : 0)}" fill="${btnColor || neon}" font-size="6" font-weight="700">${esc(dsLabel)}</text>
-      ${actionLabel ? `<text text-anchor="middle" dominant-baseline="middle" font-family="monospace,sans-serif" style="pointer-events:none"
+      ${actionLabel ? `<text text-anchor="middle" dominant-baseline="middle" font-family="monospace,sans-serif" pointer-events="none"
         x="${cx}" y="${cy + 5}" fill="rgba(255,255,255,0.5)" font-size="4.5">${esc(actionLabel)}</text>` : ''}
     </g>`;
   }
@@ -2281,8 +2319,7 @@ function buildDualSenseSVG(systemId) {
     return mkBtn(id, shape, cx, cy, dsLabel, btnColor, action);
   }
 
-  return `<svg viewBox="0 0 560 310" xmlns="http://www.w3.org/2000/svg" id="ctrl-svg"
-      style="width:100%;max-width:640px;display:block;margin:0 auto;user-select:none">
+  return `<svg viewBox="0 0 560 310" xmlns="http://www.w3.org/2000/svg" id="ctrl-svg" class="ctrl-svg">
     <defs>
       <filter id="ds-glow" x="-40%" y="-40%" width="180%" height="180%">
         <feGaussianBlur stdDeviation="4" result="b"/>
@@ -2305,12 +2342,12 @@ function buildDualSenseSVG(systemId) {
           fill="#0d0d0d" stroke="${neon}" stroke-width="1.5" opacity="0.95" filter="url(#ds-glow)"/>
 
     <!-- Touchpad -->
-    <g class="ds-btn-g" data-id="ds-touchpad" data-label="TP" style="cursor:pointer">
+    <g class="ds-btn-g" data-id="ds-touchpad" data-label="TP" cursor="pointer">
       <rect id="ds-touchpad" x="208" y="70" width="144" height="82" rx="10"
             fill="${neon}12" stroke="${neon}55" stroke-width="1.2"/>
       <text x="280" y="111" text-anchor="middle" dominant-baseline="middle"
-            fill="${neon}66" font-size="8" font-family="monospace,sans-serif" style="pointer-events:none">TOUCHPAD</text>
-      ${sysMap[17] ? `<text x="280" y="124" text-anchor="middle" dominant-baseline="middle" fill="rgba(255,255,255,0.35)" font-size="6" font-family="monospace,sans-serif" style="pointer-events:none">${esc(sysMap[17])}</text>` : ''}
+            fill="${neon}66" font-size="8" font-family="monospace,sans-serif" pointer-events="none">TOUCHPAD</text>
+      ${sysMap[17] ? `<text x="280" y="124" text-anchor="middle" dominant-baseline="middle" fill="rgba(255,255,255,0.35)" font-size="6" font-family="monospace,sans-serif" pointer-events="none">${esc(sysMap[17])}</text>` : ''}
     </g>
 
     <!-- L2 trigger -->
@@ -2323,8 +2360,8 @@ function buildDualSenseSVG(systemId) {
     ${mkRect('ds-r1', 436, 62, 84, 18, 6, 'R1', null, sysMap[5])}
 
     <!-- D-pad cross background -->
-    <rect x="104" y="84" width="14" height="46" rx="3" fill="${neon}08" stroke="${neon}22" stroke-width="1" style="pointer-events:none"/>
-    <rect x="80" y="100" width="62" height="14" rx="3" fill="${neon}08" stroke="${neon}22" stroke-width="1" style="pointer-events:none"/>
+    <rect x="104" y="84" width="14" height="46" rx="3" fill="${neon}08" stroke="${neon}22" stroke-width="1" pointer-events="none"/>
+    <rect x="80" y="100" width="62" height="14" rx="3" fill="${neon}08" stroke="${neon}22" stroke-width="1" pointer-events="none"/>
     <!-- D-pad buttons — accurate DualSense layout, center (111,107) -->
     ${mkRect('ds-up',    104, 84,  14, 16, 3, '↑', null, sysMap[12])}
     ${mkRect('ds-down',  104, 114, 14, 16, 3, '↓', null, sysMap[13])}
@@ -2339,19 +2376,19 @@ function buildDualSenseSVG(systemId) {
 
     <!-- Left stick — accurate position, outer r=37 -->
     <circle id="ds-lstick" class="ds-btn-g" data-id="ds-lstick" data-label="L3"
-            cx="193" cy="196" r="37" fill="${neon}10" stroke="${neon}55" stroke-width="1.3" style="cursor:pointer"/>
+            cx="193" cy="196" r="37" fill="${neon}10" stroke="${neon}55" stroke-width="1.3" cursor="pointer"/>
     <circle id="ds-lstick-dot" cx="193" cy="196" r="14"
-            fill="${neon}20" stroke="${neon}88" stroke-width="1" style="pointer-events:none"/>
+            fill="${neon}20" stroke="${neon}88" stroke-width="1" pointer-events="none"/>
     <text x="193" y="196" text-anchor="middle" dominant-baseline="middle"
-          fill="${neon}88" font-size="7" font-family="monospace,sans-serif" style="pointer-events:none">L3</text>
+          fill="${neon}88" font-size="7" font-family="monospace,sans-serif" pointer-events="none">L3</text>
 
     <!-- Right stick — accurate position -->
     <circle id="ds-rstick" class="ds-btn-g" data-id="ds-rstick" data-label="R3"
-            cx="367" cy="196" r="37" fill="${neon}10" stroke="${neon}55" stroke-width="1.3" style="cursor:pointer"/>
+            cx="367" cy="196" r="37" fill="${neon}10" stroke="${neon}55" stroke-width="1.3" cursor="pointer"/>
     <circle id="ds-rstick-dot" cx="367" cy="196" r="14"
-            fill="${neon}20" stroke="${neon}88" stroke-width="1" style="pointer-events:none"/>
+            fill="${neon}20" stroke="${neon}88" stroke-width="1" pointer-events="none"/>
     <text x="367" y="196" text-anchor="middle" dominant-baseline="middle"
-          fill="${neon}88" font-size="7" font-family="monospace,sans-serif" style="pointer-events:none">R3</text>
+          fill="${neon}88" font-size="7" font-family="monospace,sans-serif" pointer-events="none">R3</text>
 
     <!-- Create / Options -->
     ${mkCircle('ds-create',  230, 160, 10, 'Cre', null, sysMap[8])}
@@ -2425,19 +2462,20 @@ function renderControls() {
   const content = $id('controls-content');
 
   const tabs = EMULATOR_SYSTEMS.map(s =>
-    `<button class="ctrl-tab${s.id === activeCtrlSystem ? ' ctrl-tab--active' : ''}" data-sys="${s.id}" style="--ct:${s.neon}">${esc(s.name)}</button>`
+    `<button class="ctrl-tab${s.id === activeCtrlSystem ? ' ctrl-tab--active' : ''}" data-sys="${s.id}" data-s-ct="${s.neon}">${esc(s.name)}</button>`
   ).join('');
 
   content.innerHTML = `
     <div class="ctrl-tabs">${tabs}</div>
     <div class="ctrl-diagram">${buildDualSenseSVG(activeCtrlSystem)}</div>
-    <div class="ctrl-hint" style="display:flex;justify-content:center;gap:24px;align-items:center">
-      <span id="ctrl-gp-status" style="font-size:12px;color:rgba(255,255,255,0.3)">○ No controller detected</span>
-      <span style="color:var(--text-3);font-size:12px">Click a button to remap</span>
+    <div class="ctrl-hint ctrl-hint-row">
+      <span id="ctrl-gp-status" class="ctrl-gp-status-text">○ No controller detected</span>
+      <span class="muted-sm">Click a button to remap</span>
     </div>
     <div class="ctrl-actions">
       <button class="btn btn-danger btn-sm" id="ctrl-reset">Reset ${esc(sys?.name || activeCtrlSystem)} to Defaults</button>
     </div>`;
+  applyDataStyles(content);
 
   content.querySelectorAll('.ctrl-tab').forEach(tab => {
     tab.addEventListener('click', () => { activeCtrlSystem = tab.dataset.sys; stopGamepadPoll(); renderControls(); });

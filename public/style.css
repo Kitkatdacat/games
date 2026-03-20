@@ -656,10 +656,10 @@ html, body {
 .card-lib-btn.in-library { background: rgba(0,0,0,.85); border-color: rgba(255,0,0,.4); color: #ff0000; }
 .card-lib-btn.in-library:hover { background: rgba(0,0,0,.9); color: #ff0000; border-color: #ff0000; box-shadow: 0 0 10px rgba(255,0,0,0.5); }
 
+.game-card--no-cover { background: linear-gradient(135deg, var(--surface-2), var(--surface-3)); }
 .game-card-no-cover {
   width: 100%; height: 100%; display: flex; align-items: center; justify-content: center;
   color: var(--text-3); font-size: 11px; text-align: center; padding: 12px;
-  background: linear-gradient(135deg, var(--surface-2), var(--surface-3));
 }
 
 .shelf-track .game-card { width: 269px; height: 384px; }
@@ -1398,16 +1398,17 @@ html, body {
   box-shadow: 0 0 24px color-mix(in srgb, var(--sys-neon, #00d8ff) 60%, transparent);
   text-shadow: 0 0 12px var(--sys-neon, #00d8ff), 0 0 24px var(--sys-neon, #00d8ff);
 }
-.emu-system-hero-title { font-size: clamp(36px, 5vw, 72px); font-weight: 800; margin: 0 0 12px; }
+.emu-system-hero-title { font-size: clamp(36px, 5vw, 72px); font-weight: 800; margin: 0 0 12px; color: var(--sys-neon, #00d8ff); text-shadow: 0 0 16px var(--sys-neon, #00d8ff); }
 .emu-system-hero-desc { font-size: 15px; color: var(--text-2); max-width: 640px; margin: 0 0 12px; line-height: 1.6; }
-.emu-system-hero-meta { font-size: 14px; font-weight: 700; }
+.emu-system-hero-meta { font-size: 14px; font-weight: 700; color: var(--sys-neon, #00d8ff); }
+.emu-system-name { color: #fff; text-shadow: 0 0 4px #fff, 0 0 10px var(--card-neon, #00d8ff), 0 0 24px var(--card-neon, #00d8ff), 0 0 48px var(--card-neon, #00d8ff); }
 
 #emu-rom-list { padding: 0 48px 48px; }
 .emu-rom-item {
   display: flex; align-items: center; gap: 14px;
   padding: 12px 16px; background: var(--surface);
   border: 1px solid var(--border); border-radius: var(--radius-sm);
-  margin-bottom: 8px; transition: border-color var(--trans);
+  margin-bottom: 8px; transition: border-color var(--trans); cursor: pointer;
 }
 .emu-rom-item:hover { border-color: #00d8ff; box-shadow: 0 0 8px rgba(0,216,255,0.2); }
 .emu-rom-icon { color: var(--text-3); flex-shrink: 0; }
@@ -1697,3 +1698,57 @@ html, body {
   font-size: clamp(10px, 0.7vw, 13px);
   color: rgba(255,255,255,.45);
 }
+
+/* ── CSP utility classes ──────────────────────────────────────────────────── */
+/* Layout */
+.flex-1 { flex: 1; }
+.flex-center-gap { display: flex; gap: 8px; justify-content: center; }
+.flex-row-mt8 { display: flex; gap: 8px; margin-top: 8px; }
+.flex-row-mt20 { display: flex; gap: 10px; margin-top: 20px; }
+.col-start { flex-direction: column; align-items: flex-start; gap: 2px; }
+.flex-row-full { display: flex; align-items: center; gap: 8px; width: 100%; }
+.ml-4 { margin-left: 4px; }
+.ml-auto { margin-left: auto; }
+.mt-8 { margin-top: 8px; }
+.mt-12 { margin-top: 12px; }
+.nowrap { white-space: nowrap; }
+/* Typography */
+.muted-sm { color: var(--text-3); font-size: 12px; }
+.muted-xs { color: var(--text-3); font-size: 11px; }
+.error-sm { color: #ff4444; font-size: 12px; }
+.form-heading { margin-bottom: 20px; font-size: 16px; }
+.meta-sep { color: var(--border); }
+.lib-count { color: var(--profile-neon, #00d8ff); text-shadow: 0 0 8px var(--profile-neon, #00d8ff); font-size: 18px; font-weight: 700; }
+.dd-stat-val { font-weight: 700; }
+/* Star rating */
+.star-btn { background: none; border: none; font-size: 24px; cursor: pointer; padding: 0 3px; line-height: 1; }
+.star-rating-center { justify-content: center; margin: 12px 0; }
+.review-stars-filled { color: #d0ff00; text-shadow: 0 0 4px #d0ff00; }
+.review-stars-empty { color: rgba(255,255,255,0.5); }
+.no-reviews-msg { color: #fff; font-size: 12px; margin-bottom: 12px; }
+/* Modal play button neon letters */
+.btn-modal-play span { color: var(--nl); text-shadow: 0 0 10px var(--nl); }
+/* Emulators */
+.emu-icon-img { width: 80%; height: 80%; object-fit: contain; }
+/* Session */
+.session-progress { font-size: 12px; flex: 1; }
+/* Controller */
+.ctrl-hint-row { display: flex; justify-content: center; gap: 24px; align-items: center; }
+.ctrl-gp-status-text { font-size: 12px; color: rgba(255,255,255,0.3); }
+.ctrl-svg { width: 100%; max-width: 640px; display: block; margin: 0 auto; user-select: none; }
+/* Admin hosted list */
+.server-online { color: var(--accent); }
+.server-offline { color: var(--text-3); }
+.admin-server-meta { font-size: 11px; color: var(--text-3); }
+/* Admin add row wrap variant */
+.admin-add-row--wrap { flex-wrap: wrap; gap: 8px; }
+/* Chips */
+.chip-xs { font-size: 9px; }
+/* Hosted server form input widths */
+#hosted-host-input   { width: 130px; }
+#hosted-port-input   { width: 70px; }
+#hosted-start-input, #hosted-stop-input, #hosted-desc-input { width: 170px; }
+#hosted-image-input  { width: 230px; }
+#hosted-config-input { width: 250px; }
+/* IGDB platform select */
+#gf-igdb-platform { font-size: 12px; padding: 5px 10px; }
