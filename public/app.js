@@ -153,8 +153,6 @@ async function loadApp() {
 
   if (currentUser.role === 'admin') {
     $id('dd-admin').classList.remove('hidden');
-  } else {
-    $id('nav-controls').classList.add('hidden');
   }
 
   // Load profile color from hub preferences
@@ -175,11 +173,13 @@ async function loadApp() {
 }
 
 async function refreshData() {
-  [games, genres, platforms] = await Promise.all([
+  let rawGames;
+  [rawGames, genres, platforms] = await Promise.all([
     api('GET', '/api/games'),
     api('GET', '/api/genres'),
     api('GET', '/api/platforms'),
   ]);
+  games = rawGames.filter(g => g.enabled !== false);
 }
 
 function applyProfileNeon(color) {
@@ -1055,12 +1055,16 @@ function switchAdminTab(name) {
   if (name === 'hosted-servers') renderAdminHosted();
 }
 
-function renderAdminCatalog(query = '') {
+async function renderAdminCatalog(query = '') {
   const wrap = $id('admin-game-table-wrap');
+  let allGames;
+  try {
+    allGames = await api('GET', '/api/games?includeDisabled=1');
+  } catch { allGames = [...games]; }
   const filtered = (query
-    ? games.filter(g => g.title.toLowerCase().includes(query.toLowerCase()) ||
+    ? allGames.filter(g => g.title.toLowerCase().includes(query.toLowerCase()) ||
                         (g.developer || '').toLowerCase().includes(query.toLowerCase()))
-    : [...games]
+    : [...allGames]
   ).sort((a, b) => a.title.localeCompare(b.title));
 
   wrap.innerHTML = `
@@ -1071,7 +1075,7 @@ function renderAdminCatalog(query = '') {
         Delete Selected (<span id="catalog-selected-count">0</span>)
       </button>
     </div>
-    ${!filtered.length ? `<div class="empty-state"><strong>${games.length ? 'No matches.' : 'No games yet.'}</strong></div>` : `
+    ${!filtered.length ? `<div class="empty-state"><strong>${allGames.length ? 'No matches.' : 'No games yet.'}</strong></div>` : `
     <table class="admin-game-table">
       <thead><tr>
         <th><input type="checkbox" id="catalog-select-all" class="catalog-checkbox" title="Select all" /></th>
@@ -1079,16 +1083,17 @@ function renderAdminCatalog(query = '') {
       </tr></thead>
       <tbody>
         ${filtered.map(g => `
-          <tr data-row-id="${esc(g.id)}">
+          <tr data-row-id="${esc(g.id)}"${!g.enabled ? ' class="catalog-row-disabled"' : ''}>
             <td><input type="checkbox" class="catalog-checkbox catalog-row-check" data-id="${esc(g.id)}" /></td>
             <td>${g.cover_url ? `<img src="${esc(g.cover_url)}" alt="" loading="lazy">` : '<div class="admin-cover-placeholder"></div>'}</td>
-            <td><strong>${esc(g.title)}</strong></td>
+            <td><strong class="catalog-title-link" data-detail="${esc(g.id)}">${esc(g.title)}</strong></td>
             <td>${esc(g.developer || '—')}</td>
             <td>${g.release_year || '—'}</td>
             <td>${(g.platforms||[]).slice(0,2).join(', ') || '—'}</td>
             <td>${g.metacritic || '—'}</td>
             <td class="nowrap">
-              <button class="btn btn-ghost btn-sm" data-edit="${esc(g.id)}">Edit</button>
+              <button class="btn btn-sm catalog-toggle-btn ${!g.enabled ? 'btn-ghost catalog-disabled' : 'btn-success'}" data-toggle="${esc(g.id)}" data-enabled="${g.enabled ? '1' : '0'}">${g.enabled ? 'Disable' : 'Enable'}</button>
+              <button class="btn btn-ghost btn-sm ml-4" data-edit="${esc(g.id)}">Edit</button>
               <button class="btn btn-danger btn-sm ml-4" data-del="${esc(g.id)}">Del</button>
             </td>
           </tr>`
@@ -1148,6 +1153,20 @@ function renderAdminCatalog(query = '') {
     });
   }
 
+  wrap.querySelectorAll('[data-detail]').forEach(el => {
+    el.addEventListener('click', () => openDetailModal(el.dataset.detail));
+  });
+  wrap.querySelectorAll('[data-toggle]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const id = btn.dataset.toggle;
+      const enabling = btn.dataset.enabled === '0';
+      try {
+        await api('PUT', `/api/games/${id}`, { enabled: enabling ? 1 : 0 });
+        renderAdminCatalog(query);
+        toast(enabling ? 'Game enabled' : 'Game disabled', 'success');
+      } catch (err) { toast(err.message, 'error'); }
+    });
+  });
   wrap.querySelectorAll('[data-edit]').forEach(btn => {
     btn.addEventListener('click', () => {
       switchAdminTab('add-game');
@@ -1204,6 +1223,7 @@ function renderGameForm(gameId) {
           <svg viewBox="0 0 20 20" fill="none" width="20" height="20"><path d="M10 3v10M6 7l4-4 4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M3 17h14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
           Cover Image
         </label>
+        <div class="gf-upload-desc">Portrait art (3:4) shown on game cards and the detail popup. Recommended 600×900.</div>
         <input type="file" id="gf-cover-file" accept="image/*" class="hidden" />
         <div class="gf-upload-status" id="gf-cover-status"></div>
       </div>
@@ -1213,6 +1233,7 @@ function renderGameForm(gameId) {
           <svg viewBox="0 0 20 20" fill="none" width="20" height="20"><path d="M10 3v10M6 7l4-4 4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M3 17h14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
           Hero / Banner
         </label>
+        <div class="gf-upload-desc">Wide landscape art (16:9) shown in the hero banner at the top of the library. Recommended 1920×1080.</div>
         <input type="file" id="gf-hero-file" accept="image/*" class="hidden" />
         <div class="gf-upload-status" id="gf-hero-status"></div>
       </div>
@@ -1564,7 +1585,7 @@ function renderGameForm(gameId) {
                   const url = b.closest('.gf-img-thumb').dataset.url;
                   if (b.dataset.field === 'cover') $id('gf-cover').value = url;
                   else $id('gf-hero').value = url;
-                  resultsEl.querySelectorAll('.gf-img-thumb').forEach(t => t.classList.remove('gf-img-selected-cover','gf-img-selected-hero'));
+                  resultsEl.querySelectorAll('.gf-img-thumb').forEach(t => t.classList.remove(`gf-img-selected-${b.dataset.field}`));
                   b.closest('.gf-img-thumb').classList.add(`gf-img-selected-${b.dataset.field}`);
                   toast(`${b.dataset.field === 'cover' ? 'Cover' : 'Hero'} image set`, 'success');
                 };
@@ -1836,8 +1857,20 @@ async function renderEmulators() {
 
   if (!activeEmuSystem) {
     // System selection grid
+    const isAdmin = currentUser?.role === 'admin';
+    let visibleSystems = EMULATOR_SYSTEMS;
+    let cachedRoms = [];
+    try {
+      cachedRoms = await api('GET', '/api/roms');
+      if (!isAdmin) {
+        const linkedRomIds = new Set(games.filter(g => g.rom_id).map(g => g.rom_id));
+        const linkedRoms = cachedRoms.filter(r => linkedRomIds.has(r.id));
+        const systemsWithRoms = new Set(linkedRoms.map(r => r.system));
+        visibleSystems = EMULATOR_SYSTEMS.filter(s => systemsWithRoms.has(s.id));
+      }
+    } catch {}
     content.innerHTML = `<div class="emu-systems-grid">${
-      EMULATOR_SYSTEMS.map(s => `
+      visibleSystems.map(s => `
         <button class="emu-system-card" data-system="${s.id}" data-s-card-neon="${s.neon}">
           <div class="emu-system-icon" data-s-bg="${s.color}">
             ${s.logo
@@ -1859,16 +1892,15 @@ async function renderEmulators() {
       card.addEventListener('click', () => { activeEmuSystem = card.dataset.system; renderEmulators(); });
     });
 
-    // Load ROM counts in background
-    api('GET', '/api/roms').then(allRoms => {
-      EMULATOR_SYSTEMS.forEach(s => {
-        const el = $id(`emu-count-${s.id}`);
-        if (el) {
-          const n = allRoms.filter(r => r.system === s.id).length;
-          el.textContent = n + ' ROM' + (n !== 1 ? 's' : '');
-        }
-      });
-    }).catch(() => {});
+    // Show linked ROM counts
+    const linkedRomIds = new Set(games.filter(g => g.rom_id).map(g => g.rom_id));
+    visibleSystems.forEach(s => {
+      const el = $id(`emu-count-${s.id}`);
+      if (el) {
+        const n = cachedRoms.filter(r => r.system === s.id && linkedRomIds.has(r.id)).length;
+        el.textContent = n + ' game' + (n !== 1 ? 's' : '');
+      }
+    });
 
   } else {
     // ROM list for selected system
@@ -1956,18 +1988,19 @@ function launchEmulator(romId, romName) {
   const romUrl = window.location.origin + `/api/roms/${romId}/file`;
   const url = `/emulator.html?core=${encodeURIComponent(activeEmuSystem)}&rom=${encodeURIComponent(romUrl)}`;
 
-  // Translate any user remaps from the Controls view into RetroArch input options
-  // and stash them in localStorage for emulator.html to pick up on load.
-  const retroMap = SYSTEM_BTN_RETRO[activeEmuSystem] || {};
-  const userCfg  = loadCtrlConfig()[activeEmuSystem] || {};
+  // Translate user remaps from the Controls view into RetroArch input options
+  // and stash in localStorage for emulator.html to pick up on load.
+  // Config is keyed by retroKey directly (e.g. 'btn_b': 'GP:0').
+  const userCfg = loadCtrlConfig()[activeEmuSystem] || {};
   const opts = {};
-  for (const [dsId, binding] of Object.entries(userCfg)) {
-    if (!binding || !binding.startsWith('GP:')) continue;
-    const defaultIdx = DS_BUTTONS.findIndex(b => b.id === dsId);
-    if (defaultIdx === -1) continue;
-    const retroKey = retroMap[defaultIdx];
-    if (!retroKey) continue;
-    opts[`input_player1_${retroKey}`] = String(parseInt(binding.slice(3)));
+  for (const [retroKey, binding] of Object.entries(userCfg)) {
+    if (!binding) continue;
+    if (binding.startsWith('GP:')) {
+      opts[`input_player1_${retroKey}`] = String(parseInt(binding.slice(3)));
+    } else if (binding.startsWith('AXIS:')) {
+      const [, axis, dir] = binding.split(':');
+      opts[`input_player1_${retroKey}`] = `${dir}${axis}`;
+    }
   }
   localStorage.setItem('emu_input_opts', JSON.stringify(opts));
 
@@ -2223,15 +2256,87 @@ const DS_SYSTEM_MAP = {
   nds:    { 0:'B', 1:'A', 2:'Y', 3:'X', 4:'L', 5:'R', 8:'Select', 9:'Start', 12:'↑', 13:'↓', 14:'←', 15:'→' },
 };
 
-// Gamepad button index → RetroArch input_player1_* key, per system
-const SYSTEM_BTN_RETRO = {
-  nes:    { 0:'btn_b', 1:'btn_a', 8:'btn_select', 9:'btn_start', 12:'btn_up', 13:'btn_down', 14:'btn_left', 15:'btn_right' },
-  snes:   { 0:'btn_b', 1:'btn_a', 2:'btn_y', 3:'btn_x', 4:'btn_l', 5:'btn_r', 8:'btn_select', 9:'btn_start', 12:'btn_up', 13:'btn_down', 14:'btn_left', 15:'btn_right' },
-  n64:    { 0:'btn_b', 1:'btn_a', 4:'btn_l', 5:'btn_r', 6:'btn_l2', 9:'btn_start', 12:'btn_up', 13:'btn_down', 14:'btn_left', 15:'btn_right' },
-  gba:    { 0:'btn_b', 1:'btn_a', 4:'btn_l', 5:'btn_r', 8:'btn_select', 9:'btn_start', 12:'btn_up', 13:'btn_down', 14:'btn_left', 15:'btn_right' },
-  psx:    { 0:'btn_b', 1:'btn_a', 2:'btn_y', 3:'btn_x', 4:'btn_l', 5:'btn_r', 6:'btn_l2', 7:'btn_r2', 8:'btn_select', 9:'btn_start', 12:'btn_up', 13:'btn_down', 14:'btn_left', 15:'btn_right' },
-  segaMD: { 0:'btn_b', 1:'btn_a', 2:'btn_y', 9:'btn_start', 12:'btn_up', 13:'btn_down', 14:'btn_left', 15:'btn_right' },
-  nds:    { 0:'btn_b', 1:'btn_a', 2:'btn_y', 3:'btn_x', 4:'btn_l', 5:'btn_r', 8:'btn_select', 9:'btn_start', 12:'btn_up', 13:'btn_down', 14:'btn_left', 15:'btn_right' },
+// Ordered button list per system — used for the Controls mapping table
+// label = displayed name, retroKey = RetroArch input_player1_* option key
+const SYSTEM_BUTTONS = {
+  nes:    [
+    { label:'B',      retroKey:'btn_b'      }, { label:'A',      retroKey:'btn_a'      },
+    { divider: true },
+    { label:'Select', retroKey:'btn_select' }, { label:'Start',  retroKey:'btn_start'  },
+    { divider: true },
+    { label:'↑',      retroKey:'btn_up'     }, { label:'↓',      retroKey:'btn_down'   },
+    { label:'←',      retroKey:'btn_left'   }, { label:'→',      retroKey:'btn_right'  },
+  ],
+  snes:   [
+    { label:'B',      retroKey:'btn_b'      }, { label:'A',      retroKey:'btn_a'      },
+    { label:'Y',      retroKey:'btn_y'      }, { label:'X',      retroKey:'btn_x'      },
+    { divider: true },
+    { label:'L',      retroKey:'btn_l'      }, { label:'R',      retroKey:'btn_r'      },
+    { divider: true },
+    { label:'Select', retroKey:'btn_select' }, { label:'Start',  retroKey:'btn_start'  },
+    { divider: true },
+    { label:'↑',      retroKey:'btn_up'     }, { label:'↓',      retroKey:'btn_down'   },
+    { label:'←',      retroKey:'btn_left'   }, { label:'→',      retroKey:'btn_right'  },
+  ],
+  n64:    [
+    { label:'B',      retroKey:'btn_b'        }, { label:'A',      retroKey:'btn_a'        },
+    { divider: true },
+    { label:'Z',      retroKey:'btn_l2'       }, { label:'L',      retroKey:'btn_l'        },
+    { label:'R',      retroKey:'btn_r'        },
+    { divider: true },
+    { label:'Start',  retroKey:'btn_start'    },
+    { divider: true },
+    { label:'↑',      retroKey:'btn_up'       }, { label:'↓',      retroKey:'btn_down'     },
+    { label:'←',      retroKey:'btn_left'     }, { label:'→',      retroKey:'btn_right'    },
+    { divider: true },
+    { label:'C ↑',    retroKey:'r_y_minus'    }, { label:'C ↓',    retroKey:'r_y_plus'     },
+    { label:'C ←',    retroKey:'r_x_minus'   }, { label:'C →',    retroKey:'r_x_plus'    },
+  ],
+  gba:    [
+    { label:'B',      retroKey:'btn_b'      }, { label:'A',      retroKey:'btn_a'      },
+    { divider: true },
+    { label:'L',      retroKey:'btn_l'      }, { label:'R',      retroKey:'btn_r'      },
+    { divider: true },
+    { label:'Select', retroKey:'btn_select' }, { label:'Start',  retroKey:'btn_start'  },
+    { divider: true },
+    { label:'↑',      retroKey:'btn_up'     }, { label:'↓',      retroKey:'btn_down'   },
+    { label:'←',      retroKey:'btn_left'   }, { label:'→',      retroKey:'btn_right'  },
+  ],
+  psx:    [
+    { label:'✕',      retroKey:'btn_b'      }, { label:'○',      retroKey:'btn_a'      },
+    { label:'□',      retroKey:'btn_y'      }, { label:'△',      retroKey:'btn_x'      },
+    { divider: true },
+    { label:'L1',     retroKey:'btn_l'      }, { label:'R1',     retroKey:'btn_r'      },
+    { label:'L2',     retroKey:'btn_l2'     }, { label:'R2',     retroKey:'btn_r2'     },
+    { divider: true },
+    { label:'Select', retroKey:'btn_select' }, { label:'Start',  retroKey:'btn_start'  },
+    { divider: true },
+    { label:'↑',      retroKey:'btn_up'     }, { label:'↓',      retroKey:'btn_down'   },
+    { label:'←',      retroKey:'btn_left'   }, { label:'→',      retroKey:'btn_right'  },
+  ],
+  segaMD: [
+    { label:'A',      retroKey:'btn_y'      }, { label:'B',      retroKey:'btn_b'      },
+    { label:'C',      retroKey:'btn_a'      },
+    { divider: true },
+    { label:'X',      retroKey:'btn_x'      }, { label:'Y',      retroKey:'btn_l'      },
+    { label:'Z',      retroKey:'btn_r'      },
+    { divider: true },
+    { label:'Start',  retroKey:'btn_start'  }, { label:'Mode',   retroKey:'btn_select' },
+    { divider: true },
+    { label:'↑',      retroKey:'btn_up'     }, { label:'↓',      retroKey:'btn_down'   },
+    { label:'←',      retroKey:'btn_left'   }, { label:'→',      retroKey:'btn_right'  },
+  ],
+  nds:    [
+    { label:'B',      retroKey:'btn_b'      }, { label:'A',      retroKey:'btn_a'      },
+    { label:'Y',      retroKey:'btn_y'      }, { label:'X',      retroKey:'btn_x'      },
+    { divider: true },
+    { label:'L',      retroKey:'btn_l'      }, { label:'R',      retroKey:'btn_r'      },
+    { divider: true },
+    { label:'Select', retroKey:'btn_select' }, { label:'Start',  retroKey:'btn_start'  },
+    { divider: true },
+    { label:'↑',      retroKey:'btn_up'     }, { label:'↓',      retroKey:'btn_down'   },
+    { label:'←',      retroKey:'btn_left'   }, { label:'→',      retroKey:'btn_right'  },
+  ],
 };
 
 let activeCtrlSystem = null;
@@ -2242,6 +2347,11 @@ function keyLabel(k) {
   if (k.startsWith('GP:')) {
     const i = parseInt(k.slice(3));
     return DS_BUTTONS[i]?.label ?? `B${i}`;
+  }
+  if (k.startsWith('AXIS:')) {
+    const [, axis, dir] = k.split(':');
+    const labels = { '0-':'LS ←','0+':'LS →','1-':'LS ↑','1+':'LS ↓','2-':'RS ←','2+':'RS →','3-':'RS ↑','3+':'RS ↓' };
+    return labels[`${axis}${dir}`] ?? `Ax${axis}${dir}`;
   }
   const m = {
     ArrowUp: '↑', ArrowDown: '↓', ArrowLeft: '←', ArrowRight: '→',
@@ -2270,37 +2380,53 @@ async function captureInput(neon, btnLabel) {
     overlay.innerHTML = `
       <div class="ctrl-capture-box" data-s-border="${neon}" data-s-color="${neon}">
         <div class="ctrl-capture-label">${esc(btnLabel)}</div>
-        <div class="ctrl-capture-hint">Press any key or controller button…</div>
+        <div class="ctrl-capture-hint">Press a controller button…</div>
         <button class="btn btn-sm ctrl-capture-cancel">Cancel</button>
       </div>`;
     document.body.appendChild(overlay);
     applyDataStyles(overlay);
+    document.body.style.cursor = 'none';
+    const blockMouse = e => e.stopImmediatePropagation();
+    ['mousemove','mousedown','mouseup','click'].forEach(t => document.addEventListener(t, blockMouse, true));
 
     let done = false;
     const finish = result => {
       if (done) return; done = true;
       clearInterval(gpPoll);
-      window.removeEventListener('keydown', onKey, true);
       overlay.remove();
+      document.body.style.cursor = '';
+      ['mousemove','mousedown','mouseup','click'].forEach(t => document.removeEventListener(t, blockMouse, true));
       startGamepadPoll();
       resolve(result);
     };
 
     overlay.querySelector('.ctrl-capture-cancel').onclick = () => finish(null);
 
-    const onKey = e => {
-      if (e.key === 'Tab') return;
-      e.preventDefault(); e.stopPropagation();
-      finish(e.key);
-    };
-    window.addEventListener('keydown', onKey, true);
+    // Snapshot buttons already held when the overlay opens so we only
+    // capture a genuinely new press, not one held from clicking Remap.
+    const held = new Set();
+    const axisBase = {};
+    const AXIS_THRESHOLD = 0.7;
+    Array.from(navigator.getGamepads ? navigator.getGamepads() : []).forEach(gp => {
+      if (!gp) return;
+      gp.buttons.forEach((b, i) => { if (b.pressed) held.add(i); });
+      gp.axes.forEach((v, i) => { axisBase[i] = v; });
+    });
 
     const gpPoll = setInterval(() => {
-      const gps = navigator.getGamepads ? navigator.getGamepads() : [];
+      const gps = Array.from(navigator.getGamepads ? navigator.getGamepads() : []);
+      // Release buttons from snapshot once they're no longer held
+      held.forEach(i => { if (gps.every(gp => !gp || !gp.buttons[i]?.pressed)) held.delete(i); });
       for (const gp of gps) {
         if (!gp) continue;
         for (let i = 0; i < gp.buttons.length; i++) {
-          if (gp.buttons[i].pressed) { finish(`GP:${i}`); return; }
+          if (gp.buttons[i].pressed && !held.has(i)) { finish(`GP:${i}`); return; }
+        }
+        for (let i = 0; i < gp.axes.length; i++) {
+          const base = axisBase[i] ?? 0;
+          const val  = gp.axes[i];
+          if (val - base >  AXIS_THRESHOLD) { finish(`AXIS:${i}:+`); return; }
+          if (val - base < -AXIS_THRESHOLD) { finish(`AXIS:${i}:-`); return; }
         }
       }
     }, 50);
@@ -2428,52 +2554,13 @@ function buildDualSenseSVG(systemId) {
 
 function startGamepadPoll() {
   if (gpPollId) return;
-  const STICK_MAX = 20; // max pixel offset for stick dot indicator
   function poll() {
     gpPollId = requestAnimationFrame(poll);
-    const svg = $id('ctrl-svg');
-    if (!svg) { stopGamepadPoll(); return; }
-
-    const gps = navigator.getGamepads ? navigator.getGamepads() : [];
-    let anyGp = false;
-    for (const gp of gps) { if (gp) { anyGp = true; break; } }
-
     const status = $id('ctrl-gp-status');
-    if (status) {
-      status.textContent = anyGp ? '● Controller connected' : '○ No controller detected';
-      status.style.color = anyGp ? '#00ff18' : 'rgba(255,255,255,0.3)';
-    }
-
-    // Clear all active states
-    svg.querySelectorAll('.ds-active').forEach(el => {
-      el.classList.remove('ds-active');
-      el.style.filter = '';
-    });
-
-    if (!anyGp) return;
-    const gp = [...gps].find(g => g);
-    if (!gp) return;
-
-    // Highlight pressed buttons
-    gp.buttons.forEach((b, i) => {
-      if (!b.pressed && b.value < 0.1) return;
-      const def = DS_BUTTONS[i];
-      if (!def) return;
-      const el = $id(def.id);
-      if (!el) return;
-      el.classList.add('ds-active');
-      const col = def.color || EMULATOR_SYSTEMS.find(s => s.id === activeCtrlSystem)?.neon || '#00d8ff';
-      el.style.fill   = col + 'aa';
-      el.style.filter = `drop-shadow(0 0 6px ${col})`;
-    });
-
-    // Move stick dots with axes
-    const lx = gp.axes[0] || 0, ly = gp.axes[1] || 0;
-    const rx = gp.axes[2] || 0, ry = gp.axes[3] || 0;
-    const ldot = $id('ds-lstick-dot');
-    const rdot = $id('ds-rstick-dot');
-    if (ldot) { ldot.setAttribute('cx', 193 + lx * STICK_MAX); ldot.setAttribute('cy', 196 + ly * STICK_MAX); }
-    if (rdot) { rdot.setAttribute('cx', 367 + rx * STICK_MAX); rdot.setAttribute('cy', 196 + ry * STICK_MAX); }
+    if (!status) { stopGamepadPoll(); return; }
+    const anyGp = Array.from(navigator.getGamepads ? navigator.getGamepads() : []).some(g => g);
+    status.textContent = anyGp ? '● Controller connected' : '○ No controller detected';
+    status.style.color = anyGp ? '#00ff18' : 'rgba(255,255,255,0.3)';
   }
   gpPollId = requestAnimationFrame(poll);
 }
@@ -2482,50 +2569,101 @@ function stopGamepadPoll() {
   if (gpPollId) { cancelAnimationFrame(gpPollId); gpPollId = null; }
 }
 
-function renderControls() {
-  if (!activeCtrlSystem) activeCtrlSystem = EMULATOR_SYSTEMS[0].id;
-  const sys  = EMULATOR_SYSTEMS.find(s => s.id === activeCtrlSystem);
-  const neon = sys?.neon || '#00d8ff';
-  const content = $id('controls-content');
+async function renderControls() {
+  let availableSystems = EMULATOR_SYSTEMS;
+  if (currentUser?.role !== 'admin') {
+    try {
+      const roms = await api('GET', '/api/roms');
+      const linkedRomIds = new Set(games.filter(g => g.rom_id).map(g => g.rom_id));
+      const systemsWithRoms = new Set(roms.filter(r => linkedRomIds.has(r.id)).map(r => r.system));
+      availableSystems = EMULATOR_SYSTEMS.filter(s => systemsWithRoms.has(s.id));
+    } catch {}
+  }
 
-  const tabs = EMULATOR_SYSTEMS.map(s =>
+  if (!activeCtrlSystem || !availableSystems.find(s => s.id === activeCtrlSystem)) {
+    activeCtrlSystem = availableSystems[0]?.id || EMULATOR_SYSTEMS[0].id;
+  }
+  const sys     = EMULATOR_SYSTEMS.find(s => s.id === activeCtrlSystem);
+  const neon    = sys?.neon || '#00d8ff';
+  const content = $id('controls-content');
+  const cfg     = loadCtrlConfig()[activeCtrlSystem] || {};
+  const buttons = SYSTEM_BUTTONS[activeCtrlSystem] || [];
+
+  const tabs = availableSystems.map(s =>
     `<button class="ctrl-tab${s.id === activeCtrlSystem ? ' ctrl-tab--active' : ''}" data-sys="${s.id}" data-s-ct="${s.neon}">${esc(s.name)}</button>`
   ).join('');
 
+  const rows = buttons.map(entry => {
+    if (entry.divider) return '<hr class="ctrl-map-divider">';
+    const { label, retroKey } = entry;
+    const binding  = cfg[retroKey];
+    const bindText = binding ? keyLabel(binding) : '—';
+    const isSet    = !!binding;
+    const isArrow = ['↑','↓','←','→'].includes(label);
+    const bindIsArrow = ['↑','↓','←','→'].includes(bindText);
+    return `<div class="ctrl-map-row">
+      <span class="ctrl-map-label${isArrow ? ' ctrl-map-label--arrow' : ''}">${esc(label)}</span>
+      <span class="ctrl-map-binding${isSet ? ' ctrl-map-binding--set' : ''}${bindIsArrow ? ' ctrl-map-binding--arrow' : ''}">${esc(bindText)}</span>
+      <div class="ctrl-map-actions">
+        <button class="btn btn-sm ctrl-remap-btn" data-key="${retroKey}" data-label="${esc(label)}">Remap</button>
+        ${isSet ? `<button class="btn btn-sm btn-danger ctrl-clear-btn" data-key="${retroKey}">Clear</button>` : ''}
+      </div>
+    </div>`;
+  }).join('');
+
   content.innerHTML = `
     <div class="ctrl-tabs">${tabs}</div>
-    <div class="ctrl-diagram">${buildDualSenseSVG(activeCtrlSystem)}</div>
-    <div class="ctrl-hint ctrl-hint-row">
+    <div class="ctrl-center">
+    <div class="ctrl-status-row">
       <span id="ctrl-gp-status" class="ctrl-gp-status-text">○ No controller detected</span>
-      <span class="muted-sm">Click a button to remap</span>
     </div>
+    ${{ nes: '/img/controllers/nes.png', snes: '/img/controllers/snes.png', gba: '/img/controllers/gba.png', n64: '/img/controllers/n64.png', psx: '/img/controllers/psone.png', segaMD: '/img/controllers/segagenesis.jpg', nds: '/img/controllers/nds.png' }[activeCtrlSystem]
+      ? `<div class="ctrl-diagram-img"><img src="${{ nes: '/img/controllers/nes.png', snes: '/img/controllers/snes.png', gba: '/img/controllers/gba.png', n64: '/img/controllers/n64.png', psx: '/img/controllers/psone.png', segaMD: '/img/controllers/segagenesis.jpg', nds: '/img/controllers/nds.png' }[activeCtrlSystem]}" alt="${activeCtrlSystem.toUpperCase()} Controller" /></div>`
+      : ''}
+    <div class="ctrl-map-list">${rows}</div>
     <div class="ctrl-actions">
-      <button class="btn btn-danger btn-sm" id="ctrl-reset">Reset ${esc(sys?.name || activeCtrlSystem)} to Defaults</button>
+      <button class="btn btn-danger btn-sm" id="ctrl-reset">Clear All ${esc(sys?.name || activeCtrlSystem)} Bindings</button>
+    </div>
     </div>`;
   applyDataStyles(content);
+
+  // Rainbow: assign a different neon color to each row
+  if (document.documentElement.getAttribute('data-profile') === 'rainbow') {
+    const _neons = ['#00d8ff','#d0ff00','#ff00e1','#00ff18','#ff0000','#ff8c00'];
+    let _ni = 0;
+    content.querySelectorAll('.ctrl-map-row').forEach(row => {
+      row.style.setProperty('--profile-neon', _neons[_ni++ % _neons.length]);
+    });
+  }
 
   content.querySelectorAll('.ctrl-tab').forEach(tab => {
     tab.addEventListener('click', () => { activeCtrlSystem = tab.dataset.sys; stopGamepadPoll(); renderControls(); });
   });
 
-  // Click any ds-btn-g to remap
-  content.querySelectorAll('.ds-btn-g').forEach(el => {
-    el.addEventListener('click', async () => {
-      const btnId = el.dataset.id || el.id;
-      const label = el.dataset.label || btnId;
-      const input = await captureInput(neon, label);
+  content.querySelectorAll('.ctrl-remap-btn').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const input = await captureInput(neon, btn.dataset.label);
       if (input) {
-        const cfg = loadCtrlConfig();
-        if (!cfg[activeCtrlSystem]) cfg[activeCtrlSystem] = {};
-        cfg[activeCtrlSystem][btnId] = input;
-        saveCtrlConfig(cfg);
+        const c = loadCtrlConfig();
+        if (!c[activeCtrlSystem]) c[activeCtrlSystem] = {};
+        c[activeCtrlSystem][btn.dataset.key] = input;
+        saveCtrlConfig(c);
         renderControls();
       }
     });
   });
 
+  content.querySelectorAll('.ctrl-clear-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const c = loadCtrlConfig();
+      if (c[activeCtrlSystem]) delete c[activeCtrlSystem][btn.dataset.key];
+      saveCtrlConfig(c);
+      renderControls();
+    });
+  });
+
   $id('ctrl-reset').addEventListener('click', () => {
-    if (confirm(`Reset ${sys?.name || activeCtrlSystem} remaps to defaults?`)) {
+    if (confirm(`Clear all ${sys?.name || activeCtrlSystem} bindings?`)) {
       resetBindings(activeCtrlSystem);
       renderControls();
     }

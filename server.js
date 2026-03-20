@@ -118,7 +118,8 @@ app.get('/api/me', requireAuth, (req, res) => res.json(safeUser(req.user)));
 
 app.get('/api/games', requireAuth, (req, res) => {
   const { search, genre, platform, tag, sort } = req.query;
-  const games = listGames({ search, genre, platform, tag, sort });
+  const includeDisabled = req.user.role === 'admin' && req.query.includeDisabled === '1';
+  const games = listGames({ search, genre, platform, tag, sort, includeDisabled });
   const lastPlayedMap = getLastPlayedMap(req.user.id);
   const result = games.map(g => {
     const entry = getLibraryEntry(req.user.id, g.id);

@@ -117,6 +117,9 @@ try { db.prepare('SELECT rom_id FROM games LIMIT 1').get(); }
 catch { db.prepare('ALTER TABLE games ADD COLUMN rom_id TEXT').run(); }
 
 // Seed default genres and platforms if empty
+try { db.prepare('SELECT enabled FROM games LIMIT 1').get(); }
+catch { db.prepare('ALTER TABLE games ADD COLUMN enabled INTEGER NOT NULL DEFAULT 1').run(); }
+
 const genreCount = db.prepare('SELECT COUNT(*) AS n FROM genres').get().n;
 if (genreCount === 0) {
   const ins = db.prepare('INSERT OR IGNORE INTO genres (id, name) VALUES (?, ?)');
@@ -140,8 +143,9 @@ if (platCount === 0) {
 
 // ── Games ─────────────────────────────────────────────────────────────────────
 
-function listGames({ search = '', genre = '', platform = '', tag = '', sort = 'title' } = {}) {
+function listGames({ search = '', genre = '', platform = '', tag = '', sort = 'title', includeDisabled = false } = {}) {
   let sql = 'SELECT * FROM games WHERE 1=1';
+  if (!includeDisabled) sql += ' AND enabled = 1';
   const params = [];
   if (search) { sql += ' AND title LIKE ?'; params.push(`%${search}%`); }
   if (genre)  { sql += ` AND json_extract(genres, '$') LIKE ?`; params.push(`%"${genre}"%`); }
@@ -184,7 +188,7 @@ function updateGame(id, data) {
   const fields = [];
   const params = [];
   const allowed = ['title','description','cover_url','hero_url','release_year',
-    'developer','publisher','rating_esrb','metacritic','trailer_url','rom_id'];
+    'developer','publisher','rating_esrb','metacritic','trailer_url','rom_id','enabled'];
   for (const k of allowed) {
     if (data[k] !== undefined) { fields.push(`${k} = ?`); params.push(data[k] ?? null); }
   }
@@ -208,6 +212,7 @@ function parseGame(row) {
     genres:    JSON.parse(row.genres    || '[]'),
     platforms: JSON.parse(row.platforms || '[]'),
     tags:      JSON.parse(row.tags      || '[]'),
+    enabled:   row.enabled !== 0,
   };
 }
 
@@ -253,7 +258,9 @@ function removeLibraryEntry(userId, gameId) {
 
 function getLibraryStats(userId) {
   const rows = db.prepare(`
-    SELECT status, COUNT(*) AS cnt FROM user_library WHERE user_id = ? GROUP BY status
+    SELECT ul.status, COUNT(*) AS cnt FROM user_library ul
+    JOIN games g ON g.id = ul.game_id
+    WHERE ul.user_id = ? AND g.enabled != 0 GROUP BY ul.status
   `).all(userId);
   const byStatus = { playing: 0, backlog: 0, completed: 0, dropped: 0, wishlist: 0 };
   let total = 0;
