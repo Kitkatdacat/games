@@ -86,35 +86,40 @@
       document.getElementById('emu-qsave').addEventListener('click', () => window.EJS_emulator.gameManager.quickSave(1));
       document.getElementById('emu-qload').addEventListener('click', () => window.EJS_emulator.gameManager.quickLoad(1));
 
+      // Returns true if any connected gamepad's state changed within the last `ms` milliseconds.
+      // Uses gamepad.timestamp (a DOMHighResTimeStamp from performance.now()) which updates
+      // any time a button or axis changes — more reliable than checking button.pressed at
+      // the exact moment of a keydown event, since the button may already be released by then.
+      const recentGamepadInput = (ms = 200) => {
+        if (!navigator.getGamepads) return false;
+        const now = performance.now();
+        return Array.from(navigator.getGamepads()).some(gp => gp && (now - gp.timestamp) < ms);
+      };
+
       // Escape closes the emulator — but only from keyboard, not controller
       // (some controllers map Start/Options to Escape in the browser)
       document.addEventListener('keydown', e => {
         if (e.key !== 'Escape') return;
         if (document.querySelector('.ejs_menu, .ejs_settings')) return;
-        const gps = navigator.getGamepads ? navigator.getGamepads() : [];
-        const gpActive = Array.from(gps).some(gp => gp && gp.buttons.some(b => b.pressed));
-        if (gpActive) return;
+        if (recentGamepadInput(200)) return;
         if (confirm('Quit the emulator?')) window.close();
       });
 
-      // Disable mouse input on the game canvas while a gamepad is actively being used
+      // Disable mouse input on the game canvas while a gamepad is actively being used.
+      // Uses requestAnimationFrame instead of setInterval for accurate per-frame sampling.
+      let gpMouseActive = false;
       let gpMouseTimeout = null;
-      let gpMouseActive  = false;
       const game = document.getElementById('game');
       const blockMouse = e => { if (gpMouseActive) e.stopImmediatePropagation(); };
       ['mousedown', 'mouseup', 'mousemove', 'click'].forEach(t => game.addEventListener(t, blockMouse, true));
-      setInterval(() => {
-        const gps = navigator.getGamepads ? navigator.getGamepads() : [];
-        for (const gp of gps) {
-          if (!gp) continue;
-          if (gp.buttons.some(b => b.pressed) || gp.axes.some(a => Math.abs(a) > 0.2)) {
-            gpMouseActive = true;
-            clearTimeout(gpMouseTimeout);
-            gpMouseTimeout = setTimeout(() => { gpMouseActive = false; }, 2000);
-            return;
-          }
+      (function pollGamepad() {
+        if (recentGamepadInput(100)) {
+          gpMouseActive = true;
+          clearTimeout(gpMouseTimeout);
+          gpMouseTimeout = setTimeout(() => { gpMouseActive = false; }, 2000);
         }
-      }, 50);
+        requestAnimationFrame(pollGamepad);
+      })();
 
       // Watch for settings panel: hide unwanted tabs
       const observer = new MutationObserver(() => {
