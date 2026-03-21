@@ -882,7 +882,7 @@ html, body {
 
 .admin-tab:hover { color: var(--tab-neon); }
 .admin-tab.active { color: var(--tab-neon); border-bottom-color: var(--tab-neon); text-shadow: 0 0 6px var(--tab-neon); box-shadow: 0 0 8px var(--tab-neon); }
-.admin-tab-panel { padding: clamp(20px, 1.8vw, 48px) clamp(24px, 2.5vw, 64px); background: var(--surface-3); border-radius: 8px; margin: clamp(16px, 1.5vw, 36px) clamp(16px, 1.5vw, 40px) clamp(24px, 2vw, 56px); }
+.admin-tab-panel { padding: clamp(20px, 1.8vw, 48px) clamp(24px, 2.5vw, 64px); background: var(--surface-3); border-radius: 8px; margin: clamp(16px, 1.5vw, 36px) clamp(16px, 1.5vw, 40px) clamp(24px, 2vw, 56px); min-width: max-content; }
 #admin-tab-add-game.admin-tab-panel { background: transparent; }
 
 /* Game form search results */
