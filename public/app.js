@@ -2003,7 +2003,17 @@ function launchEmulator(romId, romName) {
   // and stash in localStorage for emulator.html to pick up on load.
   // Config is keyed by retroKey directly (e.g. 'btn_b': 'GP:0').
   const userCfg = loadCtrlConfig()[activeEmuSystem] || {};
+
+  // Disable ALL gamepad inputs by default — only re-enable what the user has explicitly mapped.
+  const ALL_RETRO_KEYS = [
+    'btn_b', 'btn_a', 'btn_y', 'btn_x', 'btn_l', 'btn_r', 'btn_l2', 'btn_r2',
+    'btn_select', 'btn_start', 'btn_up', 'btn_down', 'btn_left', 'btn_right',
+    'l_x_plus', 'l_x_minus', 'l_y_plus', 'l_y_minus',
+    'r_x_plus', 'r_x_minus', 'r_y_plus', 'r_y_minus',
+  ];
   const opts = {};
+  for (const key of ALL_RETRO_KEYS) opts[`input_player1_${key}`] = '-1';
+
   for (const [retroKey, binding] of Object.entries(userCfg)) {
     if (!binding) continue;
     if (binding.startsWith('GP:')) {
