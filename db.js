@@ -149,7 +149,7 @@ if (platCount === 0) {
 
 function listGames({ search = '', genre = '', platform = '', tag = '', sort = 'title', includeDisabled = false } = {}) {
   let sql = 'SELECT * FROM games WHERE 1=1';
-  if (!includeDisabled) sql += ' AND enabled = 1';
+  if (!includeDisabled) sql += ' AND enabled = 1 AND reviewed = 1';
   const params = [];
   if (search) { sql += ' AND title LIKE ?'; params.push(`%${search}%`); }
   if (genre)  { sql += ` AND json_extract(genres, '$') LIKE ?`; params.push(`%"${genre}"%`); }
