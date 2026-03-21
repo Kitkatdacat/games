@@ -1102,14 +1102,14 @@ html, body {
 .gf-upload-status { font-size: clamp(11px, 0.8vw, 20px); color: var(--sub-neon, #d0ff00); min-height: clamp(14px, 1vw, 24px); }
 .admin-game-table { width: 100%; table-layout: fixed; border-collapse: collapse; font-size: 13px; }
 /* col widths: checkbox | cover | title(flex) | developer | year | platforms | metacritic | reviewed | actions */
-.admin-game-table th:nth-child(1), .admin-game-table td:nth-child(1) { width: 36px; }
-.admin-game-table th:nth-child(2), .admin-game-table td:nth-child(2) { width: 52px; }
-.admin-game-table th:nth-child(4), .admin-game-table td:nth-child(4) { width: 130px; }
-.admin-game-table th:nth-child(5), .admin-game-table td:nth-child(5) { width: 52px; }
-.admin-game-table th:nth-child(6), .admin-game-table td:nth-child(6) { width: 110px; }
-.admin-game-table th:nth-child(7), .admin-game-table td:nth-child(7) { width: 80px; }
-.admin-game-table th:nth-child(8), .admin-game-table td:nth-child(8) { width: 72px; }
-.admin-game-table th:nth-child(9), .admin-game-table td:nth-child(9) { width: 168px; }
+.admin-game-table th:nth-child(1), .admin-game-table td:nth-child(1) { width: 3%; }
+.admin-game-table th:nth-child(2), .admin-game-table td:nth-child(2) { width: 5%; }
+.admin-game-table th:nth-child(4), .admin-game-table td:nth-child(4) { width: 13%; }
+.admin-game-table th:nth-child(5), .admin-game-table td:nth-child(5) { width: 5%; }
+.admin-game-table th:nth-child(6), .admin-game-table td:nth-child(6) { width: 10%; }
+.admin-game-table th:nth-child(7), .admin-game-table td:nth-child(7) { width: 7%; }
+.admin-game-table th:nth-child(8), .admin-game-table td:nth-child(8) { width: 6%; }
+.admin-game-table th:nth-child(9), .admin-game-table td:nth-child(9) { width: 19%; }
 /* truncate text in variable-width columns */
 .admin-game-table td:nth-child(3),
 .admin-game-table td:nth-child(4),
