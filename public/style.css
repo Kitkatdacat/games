@@ -1117,6 +1117,9 @@ html, body {
 .catalog-row-selected td { background: color-mix(in srgb, var(--sub-neon, #00d8ff) 8%, transparent) !important; }
 .catalog-row-disabled td:not(:last-child) { opacity: 0.4; }
 .catalog-delete-selected { white-space: nowrap; }
+.catalog-reviewed-btn { width: 28px; height: 28px; border-radius: 50%; border: 2px solid rgba(255,255,255,0.2); background: transparent; color: transparent; cursor: pointer; font-size: 16px; line-height: 1; transition: border-color 0.15s, background 0.15s, color 0.15s; }
+.catalog-reviewed-btn:hover { border-color: #4ade80; color: #4ade80; }
+.catalog-reviewed-on { border-color: #4ade80; background: rgba(74,222,128,0.15); color: #4ade80; }
 
 .admin-catalog-search {
   width: 100%; padding: clamp(6px, 0.5vw, 14px) clamp(10px, 0.8vw, 20px);

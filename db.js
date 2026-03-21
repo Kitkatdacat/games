@@ -121,6 +121,8 @@ catch { db.prepare('ALTER TABLE games ADD COLUMN rom_id TEXT').run(); }
 // Seed default genres and platforms if empty
 try { db.prepare('SELECT enabled FROM games LIMIT 1').get(); }
 catch { db.prepare('ALTER TABLE games ADD COLUMN enabled INTEGER NOT NULL DEFAULT 1').run(); }
+try { db.prepare('SELECT reviewed FROM games LIMIT 1').get(); }
+catch { db.prepare('ALTER TABLE games ADD COLUMN reviewed INTEGER NOT NULL DEFAULT 0').run(); }
 
 const genreCount = db.prepare('SELECT COUNT(*) AS n FROM genres').get().n;
 if (genreCount === 0) {
@@ -190,7 +192,7 @@ function updateGame(id, data) {
   const fields = [];
   const params = [];
   const allowed = ['title','description','cover_url','hero_url','release_year',
-    'developer','publisher','rating_esrb','metacritic','trailer_url','rom_id','enabled'];
+    'developer','publisher','rating_esrb','metacritic','trailer_url','rom_id','enabled','reviewed'];
   for (const k of allowed) {
     if (data[k] !== undefined) { fields.push(`${k} = ?`); params.push(data[k] ?? null); }
   }

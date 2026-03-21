@@ -1102,7 +1102,7 @@ async function renderAdminCatalog(query = '') {
     <table class="admin-game-table">
       <thead><tr>
         <th><input type="checkbox" id="catalog-select-all" class="catalog-checkbox" title="Select all" /></th>
-        <th></th><th>Title</th><th>Developer</th><th>Year</th><th>Platforms</th><th>Metacritic</th><th></th>
+        <th></th><th>Title</th><th>Developer</th><th>Year</th><th>Platforms</th><th>Metacritic</th><th>Reviewed</th><th></th>
       </tr></thead>
       <tbody>
         ${filtered.map(g => `
@@ -1114,6 +1114,7 @@ async function renderAdminCatalog(query = '') {
             <td>${g.release_year || '—'}</td>
             <td>${(g.platforms||[]).slice(0,2).join(', ') || '—'}</td>
             <td>${g.metacritic || '—'}</td>
+            <td><button class="catalog-reviewed-btn${g.reviewed ? ' catalog-reviewed-on' : ''}" data-reviewed="${esc(g.id)}" title="${g.reviewed ? 'Mark as not reviewed' : 'Mark as reviewed'}">${g.reviewed ? '✓' : ''}</button></td>
             <td class="nowrap">
               <button class="btn btn-sm catalog-toggle-btn ${!g.enabled ? 'btn-ghost catalog-disabled' : 'btn-success'}" data-toggle="${esc(g.id)}" data-enabled="${g.enabled ? '1' : '0'}">${g.enabled ? 'Disable' : 'Enable'}</button>
               <button class="btn btn-ghost btn-sm ml-4" data-edit="${esc(g.id)}">Edit</button>
@@ -1168,6 +1169,18 @@ async function renderAdminCatalog(query = '') {
       } catch (err) { toast(err.message, 'error'); }
     });
   });
+  wrap.querySelectorAll('[data-reviewed]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const id = btn.dataset.reviewed;
+      const game = allGames.find(g => g.id === id);
+      const nowReviewed = !game?.reviewed;
+      try {
+        await api('PUT', `/api/games/${id}`, { reviewed: nowReviewed ? 1 : 0 });
+        renderAdminCatalog(query);
+      } catch (err) { toast(err.message, 'error'); }
+    });
+  });
+
   wrap.querySelectorAll('[data-edit]').forEach(btn => {
     btn.addEventListener('click', () => {
       switchAdminTab('add-game');
