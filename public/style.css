@@ -1664,6 +1664,11 @@ html, body {
 }
 .server-power-btn--on  img { filter: drop-shadow(0 0 10px rgba(0,255,60,.5)); }
 .server-power-btn--off img { filter: drop-shadow(0 0 10px rgba(255,40,40,.5)); }
+.server-power-btn--starting img { animation: power-pulse 1.2s ease-in-out infinite; }
+@keyframes power-pulse {
+  0%, 100% { filter: drop-shadow(0 0 8px rgba(255,140,0,.5)); }
+  50%       { filter: drop-shadow(0 0 20px rgba(255,140,0,.9)); }
+}
 .server-power-btn:hover { transform: scale(1.1); }
 .server-power-btn--on:hover  img { filter: drop-shadow(0 0 18px rgba(0,255,60,.8)); }
 .server-power-btn--off:hover img { filter: drop-shadow(0 0 18px rgba(255,40,40,.8)); }

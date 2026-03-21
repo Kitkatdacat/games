@@ -528,12 +528,25 @@ function checkServerPort(host, port) {
   });
 }
 
+function checkServiceActive(service) {
+  if (!service) return Promise.resolve(false);
+  return new Promise(resolve => {
+    exec(`systemctl is-active ${service}`, (err, stdout) => {
+      const s = (stdout || '').trim();
+      resolve(s === 'active' || s === 'activating');
+    });
+  });
+}
+
 app.get('/api/hosted', requireAuth, async (req, res) => {
   const servers = listHostedServers();
-  const result = await Promise.all(servers.map(async s => ({
-    ...s,
-    online: await checkServerPort(s.host, s.port),
-  })));
+  const result = await Promise.all(servers.map(async s => {
+    const [online, serviceActive] = await Promise.all([
+      checkServerPort(s.host, s.port),
+      checkServiceActive(s.rcon_service),
+    ]);
+    return { ...s, online, starting: serviceActive && !online };
+  }));
   res.json(result);
 });
 

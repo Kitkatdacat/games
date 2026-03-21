@@ -2111,9 +2111,9 @@ async function renderHosted() {
         </div>
         <div class="server-tile-controls">
           ${isAdmin ? `
-          <button class="server-power-btn ${s.online ? 'server-power-btn--on' : 'server-power-btn--off'}" data-id="${esc(s.id)}" data-online="${s.online}" title="${s.online ? 'Stop server' : 'Start server'}">
+          <button class="server-power-btn ${s.online ? 'server-power-btn--on' : s.starting ? 'server-power-btn--starting' : 'server-power-btn--off'}" data-id="${esc(s.id)}" data-online="${s.online}" title="${s.online ? 'Stop server' : 'Start server'}">
             <img src="img/servers/${s.online ? 'power-on' : 'power-off'}.svg" alt="${s.online ? 'Stop' : 'Start'}">
-            <span>${s.online ? 'Running' : 'Stopped'}</span>
+            <span>${s.online ? 'Running' : s.starting ? 'Starting…' : 'Stopped'}</span>
           </button>
           <button class="server-tile-cfg-btn${s.config_path ? '' : ' hidden'}" data-id="${esc(s.id)}">⚙ Settings</button>
           <button class="server-tile-console-btn${s.rcon_password ? '' : ' hidden'}" data-id="${esc(s.id)}">▶ Console</button>
