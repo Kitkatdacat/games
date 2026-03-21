@@ -1919,10 +1919,8 @@ async function renderEmulators() {
     let emuRoms = [];
     try { emuRoms = await api('GET', `/api/roms?system=${encodeURIComponent(activeEmuSystem)}`); } catch {}
     const isAdmin = currentUser?.role === 'admin';
-    if (!isAdmin) {
-      const reviewedRomIds = new Set(games.filter(g => g.rom_id && g.reviewed).map(g => g.rom_id));
-      emuRoms = emuRoms.filter(r => reviewedRomIds.has(r.id));
-    }
+    const reviewedRomIds = new Set(games.filter(g => g.rom_id && g.reviewed).map(g => g.rom_id));
+    emuRoms = emuRoms.filter(r => reviewedRomIds.has(r.id));
 
     content.innerHTML = `
       <div class="emu-system-hero" data-s-sys-neon="${sys?.neon || '#00d8ff'}">
