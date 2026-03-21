@@ -601,6 +601,55 @@ app.patch('/api/hosted/:id/config', requireAuth, requireAdmin, (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+// ── Hosted server console (SSE log stream + RCON commands) ───────────────────
+
+app.get('/api/hosted/:id/console', requireAuth, requireAdmin, (req, res) => {
+  const s = getHostedServerById(req.params.id);
+  if (!s) return res.status(404).json({ error: 'Server not found' });
+  const service = s.rcon_service || '';
+  if (!service) return res.status(400).json({ error: 'No log service configured' });
+
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.flushHeaders();
+
+  const send = (data) => res.write(`data: ${JSON.stringify(data)}\n\n`);
+
+  const proc = require('child_process').spawn('journalctl', ['-u', service, '-f', '--no-pager', '-o', 'cat', '-n', '80']);
+  proc.stdout.on('data', chunk => {
+    chunk.toString().split('\n').filter(l => l).forEach(line => send({ line }));
+  });
+  proc.stderr.on('data', chunk => {
+    chunk.toString().split('\n').filter(l => l).forEach(line => send({ line, err: true }));
+  });
+
+  req.on('close', () => proc.kill());
+});
+
+app.post('/api/hosted/:id/console/cmd', requireAuth, requireAdmin, async (req, res) => {
+  const s = getHostedServerById(req.params.id);
+  if (!s) return res.status(404).json({ error: 'Server not found' });
+  if (!s.rcon_password || !s.rcon_port) return res.status(400).json({ error: 'RCON not configured' });
+
+  const { command } = req.body;
+  if (!command || typeof command !== 'string') return res.status(400).json({ error: 'command required' });
+
+  let Rcon;
+  try { Rcon = require('rcon-client').Rcon; } catch { return res.status(500).json({ error: 'rcon-client not installed' }); }
+
+  const rcon = new Rcon({ host: s.host || '127.0.0.1', port: s.rcon_port, password: s.rcon_password });
+  try {
+    await rcon.connect();
+    const response = await rcon.send(command.trim());
+    await rcon.end();
+    res.json({ ok: true, response });
+  } catch (err) {
+    try { await rcon.end(); } catch {}
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── Start ─────────────────────────────────────────────────────────────────────
 
 if (require.main === module) {

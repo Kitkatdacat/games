@@ -2066,6 +2066,7 @@ async function renderHosted() {
             <span>${s.online ? 'Running' : 'Stopped'}</span>
           </button>
           <button class="server-tile-cfg-btn${s.config_path ? '' : ' hidden'}" data-id="${esc(s.id)}">⚙ Settings</button>
+          <button class="server-tile-console-btn${s.rcon_password ? '' : ' hidden'}" data-id="${esc(s.id)}">▶ Console</button>
           ` : ''}
         </div>
       </div>
@@ -2092,6 +2093,11 @@ async function renderHosted() {
           btn.classList.remove('server-power-btn--busy');
         }
       });
+    });
+
+    // Console button
+    grid.querySelectorAll('.server-tile-console-btn').forEach(btn => {
+      btn.addEventListener('click', () => openServerConsole(btn.dataset.id));
     });
 
     // Settings toggle
@@ -2185,6 +2191,80 @@ function bindCfgSave(panel, id) {
       status.style.color = 'var(--danger)';
     }
   });
+}
+
+// ── Server Console ────────────────────────────────────────────────────────────
+
+let consoleSSE = null;
+
+function openServerConsole(serverId) {
+  if (consoleSSE) { consoleSSE.close(); consoleSSE = null; }
+
+  // Build modal if it doesn't exist
+  if (!$id('server-console-modal')) {
+    const el = document.createElement('div');
+    el.id = 'server-console-modal';
+    el.className = 'server-console-backdrop';
+    el.innerHTML = `
+      <div class="server-console">
+        <div class="server-console-bar">
+          <span class="server-console-title">Server Console</span>
+          <button class="server-console-close" id="server-console-close">✕</button>
+        </div>
+        <div class="server-console-output" id="server-console-output"></div>
+        <div class="server-console-input-row">
+          <span class="server-console-prompt">&gt;</span>
+          <input class="server-console-input" id="server-console-input" type="text" placeholder="Enter command…" autocomplete="off" />
+          <button class="server-console-send" id="server-console-send">Send</button>
+        </div>
+      </div>`;
+    document.body.appendChild(el);
+
+    $id('server-console-close').addEventListener('click', closeServerConsole);
+    el.addEventListener('click', e => { if (e.target === el) closeServerConsole(); });
+
+    const input = $id('server-console-input');
+    $id('server-console-send').addEventListener('click', () => sendConsoleCmd(serverId, input));
+    input.addEventListener('keydown', e => { if (e.key === 'Enter') sendConsoleCmd(serverId, input); });
+  }
+
+  $id('server-console-output').innerHTML = '';
+  $id('server-console-modal').classList.remove('hidden');
+  $id('server-console-input').focus();
+
+  // Start SSE stream
+  consoleSSE = new EventSource(`/api/hosted/${serverId}/console?appToken=${encodeURIComponent(token)}`);
+  consoleSSE.onmessage = e => {
+    const { line, err } = JSON.parse(e.data);
+    appendConsoleLine(line, err);
+  };
+  consoleSSE.onerror = () => appendConsoleLine('[Connection lost]', true);
+}
+
+function closeServerConsole() {
+  if (consoleSSE) { consoleSSE.close(); consoleSSE = null; }
+  $id('server-console-modal')?.classList.add('hidden');
+}
+
+function appendConsoleLine(line, isErr = false) {
+  const out = $id('server-console-output');
+  if (!out) return;
+  const el = document.createElement('div');
+  el.className = 'console-line' + (isErr ? ' console-line--err' : '');
+  el.textContent = line;
+  out.appendChild(el);
+  out.scrollTop = out.scrollHeight;
+}
+
+async function sendConsoleCmd(serverId, input) {
+  const command = input.value.trim();
+  if (!command) return;
+  input.value = '';
+  appendConsoleLine(`> ${command}`);
+  try {
+    const res = await api('POST', `/api/hosted/${serverId}/console/cmd`, { command });
+    if (res.response) appendConsoleLine(res.response);
+  } catch (err) { appendConsoleLine(`Error: ${err.message}`, true); }
 }
 
 async function renderAdminHosted() {
