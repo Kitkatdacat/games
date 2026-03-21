@@ -42,6 +42,26 @@
     <button class="emu-btn" id="emu-qload">⏪ Load</button>
   </div>
   <script>
+    // Filter the Gamepad API so only user-configured buttons/axes pass through to EmulatorJS.
+    // This runs before EmulatorJS loads so it sees the filtered gamepad from the start.
+    (function () {
+      const allowed  = JSON.parse(localStorage.getItem('emu_allowed_inputs') || '{"buttons":[],"axes":[]}');
+      const allowedBtns = new Set(allowed.buttons);
+      const allowedAxes = new Set(allowed.axes);
+      const _get = navigator.getGamepads.bind(navigator);
+      navigator.getGamepads = function () {
+        return _get().map(gp => {
+          if (!gp) return gp;
+          const buttons = gp.buttons.map((b, i) =>
+            allowedBtns.has(i) ? b : { pressed: false, touched: false, value: 0 }
+          );
+          const axes = gp.axes.map((v, i) => allowedAxes.has(i) ? v : 0);
+          return { id: gp.id, index: gp.index, mapping: gp.mapping, connected: gp.connected, timestamp: gp.timestamp, buttons, axes };
+        });
+      };
+    })();
+  </script>
+  <script>
     const params = new URLSearchParams(window.location.search);
     window.EJS_player        = '#game';
     window.EJS_core          = params.get('core') || 'nes';
