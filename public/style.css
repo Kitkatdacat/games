@@ -372,7 +372,7 @@ html, body {
 
 /* ── Main Content ────────────────────────────────────────────────────────── */
 #main-content {
-  flex: 1; overflow-y: auto; overflow-x: hidden;
+  flex: 1; overflow-y: auto; overflow-x: auto;
   background: var(--bg);
 }
 .view { display: none; }
@@ -1100,7 +1100,6 @@ html, body {
 .gf-upload-label:hover { text-shadow: 0 0 10px var(--sub-neon, #d0ff00); }
 .gf-upload-desc { font-size: clamp(11px, 0.75vw, 17px); color: rgba(255,255,255,0.4); line-height: 1.4; }
 .gf-upload-status { font-size: clamp(11px, 0.8vw, 20px); color: var(--sub-neon, #d0ff00); min-height: clamp(14px, 1vw, 24px); }
-#admin-game-table-wrap { overflow-x: auto; }
 .admin-game-table { width: 100%; border-collapse: collapse; font-size: clamp(13px, 0.9vw, 22px); }
 .admin-game-table th {
   text-align: left; padding: clamp(6px, 0.5vw, 14px) clamp(10px, 0.8vw, 20px);
