@@ -1221,6 +1221,12 @@ html, body {
 .catalog-disabled { opacity: 0.45; }
 .btn-sm { padding: clamp(4px, 0.35vw, 8px) clamp(10px, 0.8vw, 18px); font-size: clamp(12px, 0.85vw, 20px); }
 
+/* ── Controls Prompt Modal ───────────────────────────────────────────────── */
+.modal-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,.75); display: flex; align-items: center; justify-content: center; z-index: 600; }
+.modal-box { background: #0e0e0e; border: 1px solid var(--border); border-radius: var(--radius); padding: clamp(24px, 2vw, 40px); max-width: 420px; width: 90%; text-align: center; }
+.modal-msg { margin: 0 0 24px; line-height: 1.6; font-size: clamp(14px, 1vw, 18px); }
+.modal-actions { display: flex; gap: 12px; justify-content: center; }
+
 /* ── Game Detail Modal ───────────────────────────────────────────────────── */
 .modal-overlay {
   position: fixed; inset: 0; background: rgba(0,0,0,.75);

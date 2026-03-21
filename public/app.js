@@ -1996,13 +1996,28 @@ async function uploadRom() {
 }
 
 function launchEmulator(romId, romName) {
-  // If no controls configured for this system, redirect to Controls screen first.
+  // If no controls configured for this system, prompt user to set them up first.
   const allCfg = loadCtrlConfig();
   if (!allCfg[activeEmuSystem] || !Object.keys(allCfg[activeEmuSystem]).length) {
     const sys = EMULATOR_SYSTEMS.find(s => s.id === activeEmuSystem);
-    activeCtrlSystem = activeEmuSystem;
-    switchView('controls');
-    toast(`Set up your ${sys?.name || activeEmuSystem} controls before playing`, 'info');
+    const sysName = sys?.name || activeEmuSystem;
+    const backdrop = document.createElement('div');
+    backdrop.className = 'modal-backdrop';
+    backdrop.innerHTML = `
+      <div class="modal-box">
+        <p class="modal-msg">You do not currently have any keybinds set for <strong>${esc(sysName)}</strong>. Would you like to set that up now?</p>
+        <div class="modal-actions">
+          <button class="btn btn-ghost" id="ctrl-prompt-no">No</button>
+          <button class="btn btn-neon" id="ctrl-prompt-yes">Yes</button>
+        </div>
+      </div>`;
+    document.body.appendChild(backdrop);
+    backdrop.querySelector('#ctrl-prompt-no').addEventListener('click', () => backdrop.remove());
+    backdrop.querySelector('#ctrl-prompt-yes').addEventListener('click', () => {
+      backdrop.remove();
+      activeCtrlSystem = activeEmuSystem;
+      switchView('controls');
+    });
     return;
   }
 
