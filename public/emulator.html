@@ -43,20 +43,28 @@
   </div>
   <script>
     // Filter the Gamepad API so only user-configured buttons/axes pass through to EmulatorJS.
-    // This runs before EmulatorJS loads so it sees the filtered gamepad from the start.
+    // Must override Navigator.prototype (not the navigator instance) to work in Chrome/Firefox.
     (function () {
-      const allowed  = JSON.parse(localStorage.getItem('emu_allowed_inputs') || '{"buttons":[],"axes":[]}');
+      const allowed    = JSON.parse(localStorage.getItem('emu_allowed_inputs') || '{"buttons":[],"axes":[]}');
       const allowedBtns = new Set(allowed.buttons);
       const allowedAxes = new Set(allowed.axes);
-      const _get = navigator.getGamepads.bind(navigator);
-      navigator.getGamepads = function () {
-        return _get().map(gp => {
+      const _get = Navigator.prototype.getGamepads;
+      Navigator.prototype.getGamepads = function () {
+        return _get.call(this).map(gp => {
           if (!gp) return gp;
-          const buttons = gp.buttons.map((b, i) =>
-            allowedBtns.has(i) ? b : { pressed: false, touched: false, value: 0 }
-          );
-          const axes = gp.axes.map((v, i) => allowedAxes.has(i) ? v : 0);
-          return { id: gp.id, index: gp.index, mapping: gp.mapping, connected: gp.connected, timestamp: gp.timestamp, buttons, axes };
+          return new Proxy(gp, {
+            get(target, prop) {
+              if (prop === 'buttons') {
+                return target.buttons.map((b, i) =>
+                  allowedBtns.has(i) ? b : { pressed: false, touched: false, value: 0 }
+                );
+              }
+              if (prop === 'axes') {
+                return target.axes.map((v, i) => allowedAxes.has(i) ? v : 0);
+              }
+              return target[prop];
+            }
+          });
         });
       };
     })();
