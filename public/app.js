@@ -1057,6 +1057,36 @@ function switchAdminTab(name) {
 
 async function renderAdminCatalog(query = '') {
   const wrap = $id('admin-game-table-wrap');
+
+  // Render toolbar once — skip if it already exists so the search input isn't destroyed mid-type
+  if (!$id('admin-catalog-search')) {
+    wrap.innerHTML = `
+      <div class="catalog-toolbar">
+        <input id="admin-catalog-search" class="admin-catalog-search flex-1" type="search" placeholder="Search games…" />
+        <button class="btn btn-danger btn-sm catalog-delete-selected hidden" id="catalog-delete-selected">
+          Delete Selected (<span id="catalog-selected-count">0</span>)
+        </button>
+      </div>
+      <div id="admin-catalog-table"></div>`;
+
+    const searchEl = $id('admin-catalog-search');
+    searchEl.addEventListener('input', debounce(() => renderAdminCatalog(searchEl.value), 300));
+    searchEl.focus();
+
+    // Wire delete-selected once (button lives in the persistent toolbar)
+    $id('catalog-delete-selected').addEventListener('click', async () => {
+      const ids = [...wrap.querySelectorAll('.catalog-row-check:checked')].map(cb => cb.dataset.id);
+      if (!ids.length) return;
+      if (!confirm(`Delete ${ids.length} game${ids.length > 1 ? 's' : ''}? This cannot be undone.`)) return;
+      try {
+        await Promise.all(ids.map(id => api('DELETE', `/api/games/${id}`)));
+        await refreshData();
+        renderAdminCatalog($id('admin-catalog-search')?.value || '');
+        toast(`${ids.length} game${ids.length > 1 ? 's' : ''} deleted`);
+      } catch (err) { toast(err.message, 'error'); }
+    });
+  }
+
   let allGames;
   try {
     allGames = await api('GET', '/api/games?includeDisabled=1');
@@ -1067,15 +1097,8 @@ async function renderAdminCatalog(query = '') {
     : [...allGames]
   ).sort((a, b) => a.title.localeCompare(b.title));
 
-  wrap.innerHTML = `
-    <div class="catalog-toolbar">
-      <input id="admin-catalog-search" class="admin-catalog-search flex-1" type="search" placeholder="Search games…"
-        value="${esc(query)}" />
-      <button class="btn btn-danger btn-sm catalog-delete-selected hidden" id="catalog-delete-selected">
-        Delete Selected (<span id="catalog-selected-count">0</span>)
-      </button>
-    </div>
-    ${!filtered.length ? `<div class="empty-state"><strong>${allGames.length ? 'No matches.' : 'No games yet.'}</strong></div>` : `
+  const tableWrap = $id('admin-catalog-table');
+  tableWrap.innerHTML = !filtered.length ? `<div class="empty-state"><strong>${allGames.length ? 'No matches.' : 'No games yet.'}</strong></div>` : `
     <table class="admin-game-table">
       <thead><tr>
         <th><input type="checkbox" id="catalog-select-all" class="catalog-checkbox" title="Select all" /></th>
@@ -1099,13 +1122,7 @@ async function renderAdminCatalog(query = '') {
           </tr>`
         ).join('')}
       </tbody>
-    </table>`}`;
-
-  const searchEl = $id('admin-catalog-search');
-  if (searchEl) {
-    searchEl.addEventListener('input', debounce(() => renderAdminCatalog(searchEl.value), 300));
-    searchEl.focus();
-  }
+    </table>`;
 
   // Selection logic
   const updateSelectionUI = () => {
@@ -1136,22 +1153,6 @@ async function renderAdminCatalog(query = '') {
       updateSelectionUI();
     });
   });
-
-  // Multi-delete
-  const delSelectedBtn = $id('catalog-delete-selected');
-  if (delSelectedBtn) {
-    delSelectedBtn.addEventListener('click', async () => {
-      const ids = [...wrap.querySelectorAll('.catalog-row-check:checked')].map(cb => cb.dataset.id);
-      if (!ids.length) return;
-      if (!confirm(`Delete ${ids.length} game${ids.length > 1 ? 's' : ''}? This cannot be undone.`)) return;
-      try {
-        await Promise.all(ids.map(id => api('DELETE', `/api/games/${id}`)));
-        await refreshData();
-        renderAdminCatalog(query);
-        toast(`${ids.length} game${ids.length > 1 ? 's' : ''} deleted`);
-      } catch (err) { toast(err.message, 'error'); }
-    });
-  }
 
   wrap.querySelectorAll('[data-detail]').forEach(el => {
     el.addEventListener('click', () => openDetailModal(el.dataset.detail));
