@@ -1996,13 +1996,23 @@ async function uploadRom() {
 }
 
 function launchEmulator(romId, romName) {
+  // If no controls configured for this system, redirect to Controls screen first.
+  const allCfg = loadCtrlConfig();
+  if (!allCfg[activeEmuSystem] || !Object.keys(allCfg[activeEmuSystem]).length) {
+    const sys = EMULATOR_SYSTEMS.find(s => s.id === activeEmuSystem);
+    activeCtrlSystem = activeEmuSystem;
+    switchView('controls');
+    toast(`Set up your ${sys?.name || activeEmuSystem} controls before playing`, 'info');
+    return;
+  }
+
   const romUrl = window.location.origin + `/api/roms/${romId}/file`;
   const url = `/emulator.html?core=${encodeURIComponent(activeEmuSystem)}&rom=${encodeURIComponent(romUrl)}`;
 
   // Translate user remaps from the Controls view into RetroArch input options
   // and stash in localStorage for emulator.html to pick up on load.
   // Config is keyed by retroKey directly (e.g. 'btn_b': 'GP:0').
-  const userCfg = loadCtrlConfig()[activeEmuSystem] || {};
+  const userCfg = allCfg[activeEmuSystem] || {};
 
   // Translate bindings to RetroArch opts and collect allowed gamepad indices
   // so emulator.html can filter the Gamepad API down to only configured inputs.
