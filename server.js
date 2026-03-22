@@ -146,7 +146,7 @@ app.get('/api/me', requireAuth, (req, res) => res.json(safeUser(req.user)));
 
 app.get('/api/games', requireAuth, (req, res) => {
   const { search, genre, platform, tag, sort } = req.query;
-  const includeDisabled = req.user.role === 'admin' && req.query.includeDisabled === '1';
+  const includeDisabled = req.user.role === 'admin';
   const games = listGames({ search, genre, platform, tag, sort, includeDisabled });
   const lastPlayedMap = getLastPlayedMap(req.user.id);
   const result = games.map(g => {
@@ -159,7 +159,7 @@ app.get('/api/games', requireAuth, (req, res) => {
 app.get('/api/games/:id', requireAuth, (req, res) => {
   const game = getGameById(req.params.id);
   if (!game) return res.status(404).json({ error: 'Game not found' });
-  if (!game.enabled && req.user.role !== 'admin') return res.status(404).json({ error: 'Game not found' });
+  if (req.user.role !== 'admin' && (!game.enabled || !game.reviewed)) return res.status(404).json({ error: 'Game not found' });
   const entry = getLibraryEntry(req.user.id, game.id);
   res.json({ ...game, libraryEntry: entry || null });
 });
