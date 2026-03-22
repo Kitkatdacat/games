@@ -52,7 +52,7 @@ if (!fs.existsSync(imagesDir)) fs.mkdirSync(imagesDir, { recursive: true });
 
 async function mirrorImage(url, gameId, type) {
   if (!url || !url.startsWith('http')) return url;
-  const ext = (url.split('?')[0].match(/\.(jpe?g|png|webp|gif)$/i) || ['', '.jpg'])[1];
+  const ext = (url.split('?')[0].match(/\.(jpe?g|png|webp|gif)$/i) || ['.jpg'])[0];
   const filename = `${gameId}-${type}${ext}`;
   const dest = path.join(imagesDir, filename);
   const localUrl = `/img/games/${filename}`;
@@ -67,6 +67,8 @@ async function mirrorImage(url, gameId, type) {
     return url;
   }
 }
+
+const EXT_RE = /\.(jpe?g|png|webp|gif)$/i;
 
 async function mirrorGameImages(game) {
   const updates = {};
@@ -697,13 +699,37 @@ app.post('/api/hosted/:id/console/cmd', requireAuth, requireAdmin, async (req, r
 
 (async () => {
   const all = listGames({ includeDisabled: true });
-  const external = all.filter(g => g.cover_url?.startsWith('http') || g.hero_url?.startsWith('http'));
-  if (!external.length) return;
-  console.log(`[image-mirror] backfilling ${external.length} games…`);
-  for (const g of external) {
-    await mirrorGameImages(g);
+  let fixed = 0, downloaded = 0;
+
+  for (const g of all) {
+    const updates = {};
+
+    for (const field of ['cover_url', 'hero_url']) {
+      const url = g[field];
+      if (!url) continue;
+      const type = field === 'cover_url' ? 'cover' : 'hero';
+
+      if (url.startsWith('http')) {
+        // External URL — download it
+        updates[field] = await mirrorImage(url, g.id, type);
+        downloaded++;
+      } else if (!EXT_RE.test(url)) {
+        // Local path with no extension — rename the file and fix DB
+        const broken = path.join(__dirname, 'public', url);
+        const fixed_path = broken + '.jpg';
+        const fixed_url  = url + '.jpg';
+        if (fs.existsSync(broken) && !fs.existsSync(fixed_path)) {
+          fs.renameSync(broken, fixed_path);
+        }
+        updates[field] = fixed_url;
+        fixed++;
+      }
+    }
+
+    if (Object.keys(updates).length) updateGame(g.id, updates);
   }
-  console.log('[image-mirror] done');
+
+  if (downloaded || fixed) console.log(`[image-mirror] downloaded ${downloaded}, renamed ${fixed}`);
 })();
 
 // ── Auto-shutdown ─────────────────────────────────────────────────────────────
