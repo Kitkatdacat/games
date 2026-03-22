@@ -1534,8 +1534,8 @@ html, body {
 
 /* ── Hosted Servers ── */
 #hosted-grid {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 480px), 1fr));
   gap: clamp(16px, 1.5vw, 32px);
   padding: clamp(16px, 2vw, 48px) clamp(24px, 3vw, 64px) 64px;
 }
