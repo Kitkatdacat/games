@@ -1618,16 +1618,18 @@ html, body {
   letter-spacing: -0.02em;
   line-height: 1.05;
   color: #fff;
-  text-shadow: 0 2px 12px rgba(0,0,0,.6);
+  text-shadow: 0 0 18px rgba(160,220,255,.9), 0 0 40px rgba(100,180,255,.5), 0 2px 12px rgba(0,0,0,.6);
 }
 .server-tile-desc {
   font-size: clamp(11px, 0.85vw, 17px);
-  color: rgba(255,255,255,.55);
+  color: #a8d8ff;
+  text-shadow: 0 0 10px rgba(120,200,255,.6);
   line-height: 1.5;
 }
 .server-tile-meta {
   font-size: clamp(10px, 0.7vw, 14px);
-  color: rgba(255,255,255,.3);
+  color: #7ecfff;
+  text-shadow: 0 0 8px rgba(100,200,255,.5);
   font-family: monospace;
 }
 
@@ -1664,7 +1666,8 @@ html, body {
   font-weight: 700;
   letter-spacing: 0.1em;
   text-transform: uppercase;
-  color: rgba(255,255,255,.5);
+  color: #a8d8ff;
+  text-shadow: 0 0 8px rgba(120,200,255,.6);
 }
 .server-power-btn--on  img { filter: drop-shadow(0 0 10px rgba(0,255,60,.5)); }
 .server-power-btn--off img { filter: drop-shadow(0 0 10px rgba(255,40,40,.5)); }
