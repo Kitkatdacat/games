@@ -519,12 +519,13 @@ app.delete('/api/roms/:id', requireAuth, requireAdmin, (req, res) => {
 
 // ── Hosted Servers ─────────────────────────────────────────────────────────────
 
-function checkServerPort(host, port) {
+function checkServerReady(service) {
+  if (!service) return Promise.resolve(false);
   return new Promise(resolve => {
-    const s = net.createConnection(port, host);
-    const t = setTimeout(() => { s.destroy(); resolve(false); }, 3000);
-    s.once('connect', () => { clearTimeout(t); s.destroy(); resolve(true); });
-    s.once('error',   () => { clearTimeout(t); s.destroy(); resolve(false); });
+    exec(
+      `START=$(systemctl show ${service} --property=ActiveEnterTimestamp --value 2>/dev/null); journalctl -u ${service} --since "$START" --no-pager -o cat 2>/dev/null | grep -q "Done.*For help" && echo active || echo inactive`,
+      (err, stdout) => resolve((stdout || '').trim() === 'active')
+    );
   });
 }
 
@@ -543,7 +544,7 @@ function checkServiceActive(service) {
 app.get('/api/hosted', requireAuth, async (req, res) => {
   const servers = listHostedServers();
   const result = await Promise.all(servers.map(async s => {
-    const online = await checkServerPort(s.host, s.port);
+    const online = await checkServerReady(s.rcon_service);
     if (online) { startingServers.delete(s.id); return { ...s, online, starting: false }; }
     const starting = startingServers.has(s.id) || await checkServiceActive(s.rcon_service);
     return { ...s, online, starting };
