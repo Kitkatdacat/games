@@ -50,6 +50,32 @@ const romUpload = multer({
 const imagesDir = path.join(__dirname, 'public', 'img', 'games');
 if (!fs.existsSync(imagesDir)) fs.mkdirSync(imagesDir, { recursive: true });
 
+async function mirrorImage(url, gameId, type) {
+  if (!url || !url.startsWith('http')) return url;
+  const ext = (url.split('?')[0].match(/\.(jpe?g|png|webp|gif)$/i) || ['', '.jpg'])[1];
+  const filename = `${gameId}-${type}${ext}`;
+  const dest = path.join(imagesDir, filename);
+  const localUrl = `/img/games/${filename}`;
+  if (fs.existsSync(dest)) return localUrl;
+  try {
+    const res = await fetch(url);
+    if (!res.ok) return url;
+    const buf = Buffer.from(await res.arrayBuffer());
+    fs.writeFileSync(dest, buf);
+    return localUrl;
+  } catch {
+    return url;
+  }
+}
+
+async function mirrorGameImages(game) {
+  const updates = {};
+  if (game.cover_url?.startsWith('http')) updates.cover_url = await mirrorImage(game.cover_url, game.id, 'cover');
+  if (game.hero_url?.startsWith('http'))  updates.hero_url  = await mirrorImage(game.hero_url,  game.id, 'hero');
+  if (Object.keys(updates).length) updateGame(game.id, updates);
+  return { ...game, ...updates };
+}
+
 const imageUpload = multer({
   storage: multer.diskStorage({
     destination: imagesDir,
@@ -136,19 +162,19 @@ app.get('/api/games/:id', requireAuth, (req, res) => {
   res.json({ ...game, libraryEntry: entry || null });
 });
 
-app.post('/api/games', requireAuth, requireAdmin, (req, res) => {
+app.post('/api/games', requireAuth, requireAdmin, async (req, res) => {
   const { title } = req.body;
   if (!title) return res.status(400).json({ error: 'Title is required' });
   try {
     const game = createGame(req.body, req.user.id);
-    res.status(201).json(game);
+    res.status(201).json(await mirrorGameImages(game));
   } catch (err) { res.status(400).json({ error: err.message }); }
 });
 
-app.put('/api/games/:id', requireAuth, requireAdmin, (req, res) => {
+app.put('/api/games/:id', requireAuth, requireAdmin, async (req, res) => {
   const game = updateGame(req.params.id, req.body);
   if (!game) return res.status(404).json({ error: 'Game not found' });
-  res.json(game);
+  res.json(await mirrorGameImages(game));
 });
 
 app.post('/api/images', requireAuth, requireAdmin, imageUpload.single('image'), (req, res) => {
@@ -666,6 +692,19 @@ app.post('/api/hosted/:id/console/cmd', requireAuth, requireAdmin, async (req, r
     res.status(500).json({ error: err.message });
   }
 });
+
+// ── Backfill external images on startup ───────────────────────────────────────
+
+(async () => {
+  const all = listGames({ includeDisabled: true });
+  const external = all.filter(g => g.cover_url?.startsWith('http') || g.hero_url?.startsWith('http'));
+  if (!external.length) return;
+  console.log(`[image-mirror] backfilling ${external.length} games…`);
+  for (const g of external) {
+    await mirrorGameImages(g);
+  }
+  console.log('[image-mirror] done');
+})();
 
 // ── Auto-shutdown ─────────────────────────────────────────────────────────────
 
