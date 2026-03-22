@@ -82,7 +82,13 @@
     window.EJS_defaultOptions = {
       'input_menu_toggle_gamepad_combo': '0',
       'input_quit_gamepad_combo':        '0',
-      'input_enable_hotkey_btn':         '8',  // Share = must hold this for any hotkey to fire
+      'input_enable_hotkey_btn':         '8',            // gamepad: must hold Share for any hotkey
+      'input_enable_hotkey':             'scroll_lock',  // keyboard: must hold Scroll Lock for any hotkey
+      // Explicitly unmap pause and menu toggles so no stray button triggers them
+      'input_pause_toggle':              'nul',
+      'input_pause_toggle_btn':          'nul',
+      'input_menu_toggle':               'nul',
+      'input_menu_toggle_btn':           'nul',
     };
     // Apply any button remaps configured in the Controls view
     try {
@@ -129,15 +135,6 @@
         const now = performance.now();
         return Array.from(navigator.getGamepads()).some(gp => gp && (now - gp.timestamp) < ms);
       };
-
-      // Escape closes the emulator — but only from keyboard, not controller
-      // (some controllers map Start/Options to Escape in the browser)
-      document.addEventListener('keydown', e => {
-        if (e.key !== 'Escape') return;
-        if (document.querySelector('.ejs_menu, .ejs_settings')) return;
-        if (recentGamepadInput(200)) return;
-        if (confirm('Quit the emulator?')) window.close();
-      });
 
       // Disable mouse input on the game canvas while a gamepad is actively being used.
       // Uses requestAnimationFrame instead of setInterval for accurate per-frame sampling.
