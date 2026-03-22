@@ -1606,8 +1606,10 @@ html, body {
   border-radius: 4px;
   text-transform: uppercase;
 }
-.server-tile-badge--online  { background: rgba(0,220,80,.15); color: #00dc50; border: 1px solid rgba(0,220,80,.4); }
-.server-tile-badge--offline { background: rgba(255,50,50,.1); color: #ff4444; border: 1px solid rgba(255,50,50,.3); }
+.server-tile-badge--online    { background: rgba(0,220,80,.15);  color: #00dc50; border: 1px solid rgba(0,220,80,.4); }
+.server-tile-badge--offline   { background: rgba(255,50,50,.1);  color: #ff4444; border: 1px solid rgba(255,50,50,.3); }
+.server-tile-badge--starting  { background: rgba(255,140,0,.12); color: #ff8c00; border: 1px solid rgba(255,140,0,.4); animation: badge-pulse 1.2s ease-in-out infinite; }
+@keyframes badge-pulse { 0%,100% { opacity: 1; } 50% { opacity: .5; } }
 .server-tile-name {
   font-size: clamp(20px, 2.2vw, 42px);
   font-weight: 900;

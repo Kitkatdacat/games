@@ -2095,14 +2095,14 @@ async function renderHosted() {
   const isAdmin = currentUser && currentUser.role === 'admin';
 
   grid.innerHTML = hostedServers.map(s => `
-    <div class="server-tile${s.online ? ' server-tile--online' : ''}" data-id="${esc(s.id)}">
+    <div class="server-tile${s.online ? ' server-tile--online' : s.starting ? ' server-tile--starting' : ''}" data-id="${esc(s.id)}">
       <div class="server-tile-bg"${s.image ? ` data-s-bg-img="${esc(s.image)}"` : ''}></div>
       <div class="server-tile-scrim"></div>
       <div class="server-tile-body">
         <div class="server-tile-info">
           <div class="server-tile-status">
-            <span class="server-tile-badge ${s.online ? 'server-tile-badge--online' : 'server-tile-badge--offline'}">
-              ${s.online ? '● ONLINE' : '○ OFFLINE'}
+            <span class="server-tile-badge ${s.online ? 'server-tile-badge--online' : s.starting ? 'server-tile-badge--starting' : 'server-tile-badge--offline'}">
+              ${s.online ? '● ONLINE' : s.starting ? '◌ STARTING' : '○ OFFLINE'}
             </span>
           </div>
           <div class="server-tile-name">${esc(s.name)}</div>
