@@ -1574,7 +1574,9 @@ html, body {
   background:
     linear-gradient(to right, rgba(10,10,10,0.15) 0%, rgba(10,10,10,0.6) 45%, rgba(10,10,10,0.97) 72%, #0a0a0a 100%),
     linear-gradient(to top, rgba(0,0,0,0.7) 0%, transparent 40%);
+  transition: opacity 400ms ease;
 }
+.server-tile:hover .server-tile-scrim { opacity: 0; }
 
 /* Body layout */
 .server-tile-body {
