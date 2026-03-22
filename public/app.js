@@ -1453,13 +1453,8 @@ function renderGameForm(gameId) {
   api('GET', '/api/roms').then(roms => {
     const sel = $id('gf-rom');
     if (!sel) return;
-    roms.forEach(r => {
-      const opt = document.createElement('option');
-      opt.value = r.id;
-      opt.textContent = `${r.name} (${r.system})`;
-      if (r.id === game?.rom_id) opt.selected = true;
-      sel.appendChild(opt);
-    });
+    sel.innerHTML = '<option value="">— None —</option>' +
+      roms.map(r => `<option value="${r.id}"${r.id === game?.rom_id ? ' selected' : ''}>${esc(r.name)} (${r.system})</option>`).join('');
   }).catch(() => {});
 
   const systemToIgdbPlatform = { nes:'18', snes:'19', n64:'4', gba:'33', psx:'7', segaMD:'29', nds:'20' };
