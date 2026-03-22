@@ -113,6 +113,8 @@ for (const col of ['image', 'config_path', 'rcon_password', 'rcon_service']) {
 }
 try { db.prepare('SELECT rcon_port FROM hosted_servers LIMIT 1').get(); }
 catch { db.prepare('ALTER TABLE hosted_servers ADD COLUMN rcon_port INTEGER NOT NULL DEFAULT 0').run(); }
+try { db.prepare('SELECT auto_shutdown_hours FROM hosted_servers LIMIT 1').get(); }
+catch { db.prepare('ALTER TABLE hosted_servers ADD COLUMN auto_shutdown_hours INTEGER').run(); }
 
 // Migrate games.rom_id
 try { db.prepare('SELECT rom_id FROM games LIMIT 1').get(); }
@@ -422,7 +424,7 @@ function updateHostedServer(id, data) {
   const existing = getHostedServerById(id);
   if (!existing) return null;
   const fields = [], params = [];
-  for (const k of ['name','description','host','port','start_command','stop_command','image','config_path','rcon_port','rcon_password','rcon_service']) {
+  for (const k of ['name','description','host','port','start_command','stop_command','image','config_path','rcon_port','rcon_password','rcon_service','auto_shutdown_hours']) {
     if (data[k] !== undefined) { fields.push(`${k} = ?`); params.push(data[k]); }
   }
   if (!fields.length) return existing;

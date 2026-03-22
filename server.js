@@ -667,6 +667,55 @@ app.post('/api/hosted/:id/console/cmd', requireAuth, requireAdmin, async (req, r
   }
 });
 
+// ── Auto-shutdown ─────────────────────────────────────────────────────────────
+
+const emptySince = new Map(); // server id → timestamp when it became empty
+
+async function getRconPlayerCount(s) {
+  let Rcon;
+  try { Rcon = require('rcon-client').Rcon; } catch { return null; }
+  const rcon = new Rcon({ host: s.host || '127.0.0.1', port: s.rcon_port, password: s.rcon_password });
+  try {
+    await rcon.connect();
+    const response = await rcon.send('list');
+    await rcon.end();
+    const match = response.match(/There are (\d+)/);
+    return match ? parseInt(match[1], 10) : null;
+  } catch {
+    try { await rcon.end(); } catch {}
+    return null;
+  }
+}
+
+async function autoShutdownTick() {
+  const servers = listHostedServers().filter(s => s.auto_shutdown_hours && s.rcon_password && s.stop_command);
+  for (const s of servers) {
+    try {
+      const ready = await checkServerReady(s.rcon_service);
+      if (!ready) { emptySince.delete(s.id); continue; }
+
+      const count = await getRconPlayerCount(s);
+      if (count === null) continue; // RCON unavailable, skip
+
+      if (count > 0) {
+        emptySince.delete(s.id);
+      } else {
+        if (!emptySince.has(s.id)) emptySince.set(s.id, Date.now());
+        const emptyMs = Date.now() - emptySince.get(s.id);
+        if (emptyMs >= s.auto_shutdown_hours * 60 * 60 * 1000) {
+          console.log(`[auto-shutdown] ${s.name} empty for ${s.auto_shutdown_hours}h — stopping`);
+          emptySince.delete(s.id);
+          exec(s.stop_command, () => {});
+        }
+      }
+    } catch (err) {
+      console.error(`[auto-shutdown] error for ${s.name}:`, err.message);
+    }
+  }
+}
+
+setInterval(autoShutdownTick, 5 * 60 * 1000); // check every 5 minutes
+
 // ── Start ─────────────────────────────────────────────────────────────────────
 
 if (require.main === module) {
