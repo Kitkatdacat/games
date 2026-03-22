@@ -157,7 +157,7 @@ app.get('/api/games', requireAuth, (req, res) => {
 app.get('/api/games/:id', requireAuth, (req, res) => {
   const game = getGameById(req.params.id);
   if (!game) return res.status(404).json({ error: 'Game not found' });
-  if (!game.reviewed && req.user.role !== 'admin') return res.status(404).json({ error: 'Game not found' });
+  if (!game.enabled && req.user.role !== 'admin') return res.status(404).json({ error: 'Game not found' });
   const entry = getLibraryEntry(req.user.id, game.id);
   res.json({ ...game, libraryEntry: entry || null });
 });
