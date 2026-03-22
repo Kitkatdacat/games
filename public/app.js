@@ -2107,7 +2107,6 @@ async function renderHosted() {
           </div>
           <div class="server-tile-name">${esc(s.name)}</div>
           ${s.description ? `<div class="server-tile-desc">${esc(s.description)}</div>` : ''}
-          <div class="server-tile-meta">${esc(s.host)}:${s.port}</div>
         </div>
         <div class="server-tile-controls">
           ${isAdmin ? `
