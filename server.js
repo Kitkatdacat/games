@@ -528,24 +528,14 @@ function checkServerPort(host, port) {
   });
 }
 
-function checkServiceActive(service) {
-  if (!service) return Promise.resolve(false);
-  return new Promise(resolve => {
-    exec(`systemctl is-active ${service}`, (err, stdout) => {
-      const s = (stdout || '').trim();
-      resolve(s === 'active' || s === 'activating');
-    });
-  });
-}
+const startingServers = new Set();
 
 app.get('/api/hosted', requireAuth, async (req, res) => {
   const servers = listHostedServers();
   const result = await Promise.all(servers.map(async s => {
-    const [online, serviceActive] = await Promise.all([
-      checkServerPort(s.host, s.port),
-      checkServiceActive(s.rcon_service),
-    ]);
-    return { ...s, online, starting: serviceActive && !online };
+    const online = await checkServerPort(s.host, s.port);
+    if (online) startingServers.delete(s.id);
+    return { ...s, online, starting: startingServers.has(s.id) };
   }));
   res.json(result);
 });
@@ -572,6 +562,7 @@ app.post('/api/hosted/:id/start', requireAuth, requireAdmin, (req, res) => {
   const s = getHostedServerById(req.params.id);
   if (!s) return res.status(404).json({ error: 'Server not found' });
   if (!s.start_command) return res.status(400).json({ error: 'No start command configured' });
+  startingServers.add(s.id);
   exec(s.start_command, () => {});
   res.json({ ok: true });
 });
