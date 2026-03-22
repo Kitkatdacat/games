@@ -530,12 +530,23 @@ function checkServerPort(host, port) {
 
 const startingServers = new Set();
 
+function checkServiceActive(service) {
+  if (!service) return Promise.resolve(false);
+  return new Promise(resolve => {
+    exec(`systemctl is-active ${service}`, (err, stdout) => {
+      const s = (stdout || '').trim();
+      resolve(s === 'active' || s === 'activating');
+    });
+  });
+}
+
 app.get('/api/hosted', requireAuth, async (req, res) => {
   const servers = listHostedServers();
   const result = await Promise.all(servers.map(async s => {
     const online = await checkServerPort(s.host, s.port);
-    if (online) startingServers.delete(s.id);
-    return { ...s, online, starting: startingServers.has(s.id) };
+    if (online) { startingServers.delete(s.id); return { ...s, online, starting: false }; }
+    const starting = startingServers.has(s.id) || await checkServiceActive(s.rcon_service);
+    return { ...s, online, starting };
   }));
   res.json(result);
 });
