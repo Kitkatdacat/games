@@ -1752,6 +1752,16 @@ function setupEvents() {
     window.open(`${getHubUrl()}/help/games/`, '_blank');
   });
 
+  // Submit a Ticket
+  $id('dd-ticket').addEventListener('click', () => {
+    $id('user-dropdown').classList.add('hidden');
+    const h = window.location.hostname;
+    const url = (h === 'localhost' || h === '127.0.0.1' || /^\d+\.\d+\.\d+\.\d+$/.test(h))
+      ? `http://${h}:3005`
+      : 'https://kitkatdacat.com:3005';
+    window.location.href = url;
+  });
+
   // Leave to Hub / Admin
   $id('dd-leave').addEventListener('click', () => {
     window.location.href = getHubUrl();
