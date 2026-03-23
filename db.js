@@ -236,6 +236,10 @@ function listLibrary(userId, status = '') {
   return db.prepare(sql).all(...params);
 }
 
+function countLibraryEntries(userId) {
+  return db.prepare('SELECT COUNT(*) AS c FROM user_library WHERE user_id = ?').get(userId).c;
+}
+
 function upsertLibraryEntry(userId, gameId, data) {
   const existing = getLibraryEntry(userId, gameId);
   const now = new Date().toISOString();
@@ -465,7 +469,7 @@ function deleteReview(id) {
 
 module.exports = {
   listGames, getGameById, createGame, updateGame, deleteGame,
-  getLibraryEntry, listLibrary, upsertLibraryEntry, removeLibraryEntry, getLibraryStats,
+  getLibraryEntry, listLibrary, upsertLibraryEntry, removeLibraryEntry, getLibraryStats, countLibraryEntries,
   listSessions, getSessionById, startSession, endSession, createManualSession,
   deleteSession, getPlaytime, getOpenSession, getLastPlayedMap,
   listGenres, createGenre, deleteGenre,

@@ -26,7 +26,7 @@ const {
 } = require('@hub/auth');
 const {
   listGames, getGameById, createGame, updateGame, deleteGame,
-  getLibraryEntry, listLibrary, upsertLibraryEntry, removeLibraryEntry, getLibraryStats,
+  getLibraryEntry, listLibrary, upsertLibraryEntry, removeLibraryEntry, getLibraryStats, countLibraryEntries,
   listSessions, getSessionById, startSession, endSession, createManualSession,
   deleteSession: deletePlaytimeSession, getPlaytime, getOpenSession, getLastPlayedMap,
   listGenres, createGenre, deleteGenre,
@@ -35,6 +35,16 @@ const {
   listHostedServers, getHostedServerById, createHostedServer, updateHostedServer, deleteHostedServer,
   listReviews, getReviewByUser, upsertReview, deleteReview,
 } = require('./db');
+
+const HUB_URL = process.env.HUB_URL || 'http://localhost:3000';
+
+function awardPoints(token, amount, source, note) {
+  fetch(`${HUB_URL}/api/social/points/award`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'x-hub-session': token },
+    body: JSON.stringify({ amount, source, note }),
+  }).catch(() => {});
+}
 
 const romsDir = path.join(__dirname, 'roms');
 if (!fs.existsSync(romsDir)) fs.mkdirSync(romsDir);
@@ -211,8 +221,16 @@ app.post('/api/library', requireAuth, (req, res) => {
   const { game_id, status } = req.body;
   if (!game_id) return res.status(400).json({ error: 'game_id required' });
   if (!getGameById(game_id)) return res.status(404).json({ error: 'Game not found' });
+  const alreadyInLibrary = !!getLibraryEntry(req.user.id, game_id);
   try {
     const entry = upsertLibraryEntry(req.user.id, game_id, { status: status || 'backlog' });
+    if (!alreadyInLibrary && req.sessionToken) {
+      awardPoints(req.sessionToken, 5, 'games', 'Added a game to library');
+      const total = countLibraryEntries(req.user.id);
+      if ([10, 25, 50].includes(total)) {
+        awardPoints(req.sessionToken, 30, 'games', `Library milestone: ${total} games`);
+      }
+    }
     res.status(201).json(entry);
   } catch (err) { res.status(400).json({ error: err.message }); }
 });
@@ -220,7 +238,11 @@ app.post('/api/library', requireAuth, (req, res) => {
 app.put('/api/library/:game_id', requireAuth, (req, res) => {
   if (!getGameById(req.params.game_id)) return res.status(404).json({ error: 'Game not found' });
   try {
-    const entry = upsertLibraryEntry(req.user.id, req.params.game_id, req.body);
+    const before = getLibraryEntry(req.user.id, req.params.game_id);
+    const entry  = upsertLibraryEntry(req.user.id, req.params.game_id, req.body);
+    if (req.body.status === 'completed' && before?.status !== 'completed' && req.sessionToken) {
+      awardPoints(req.sessionToken, 25, 'games', 'Marked a game as completed');
+    }
     res.json(entry);
   } catch (err) { res.status(400).json({ error: err.message }); }
 });
@@ -293,6 +315,7 @@ app.put('/api/games/:id/reviews', requireAuth, (req, res) => {
   const { rating, body } = req.body;
   if (!rating || !body?.trim()) return res.status(400).json({ error: 'rating and body required' });
   if (rating < 1 || rating > 5) return res.status(400).json({ error: 'rating must be 1–5' });
+  const isNew = !getReviewByUser(req.params.id, req.user.id);
   const review = upsertReview({
     gameId: req.params.id,
     userId: req.user.id,
@@ -300,6 +323,10 @@ app.put('/api/games/:id/reviews', requireAuth, (req, res) => {
     rating: parseInt(rating),
     body: body.trim(),
   });
+  if (isNew && req.sessionToken) {
+    awardPoints(req.sessionToken, 10, 'games', 'Wrote a review');
+    awardPoints(req.sessionToken, 5, 'games', 'Rated a game');
+  }
   res.json(review);
 });
 
