@@ -115,6 +115,8 @@ try { db.prepare('SELECT rcon_port FROM hosted_servers LIMIT 1').get(); }
 catch { db.prepare('ALTER TABLE hosted_servers ADD COLUMN rcon_port INTEGER NOT NULL DEFAULT 0').run(); }
 try { db.prepare('SELECT auto_shutdown_hours FROM hosted_servers LIMIT 1').get(); }
 catch { db.prepare('ALTER TABLE hosted_servers ADD COLUMN auto_shutdown_hours INTEGER').run(); }
+try { db.prepare('SELECT empty_since FROM hosted_servers LIMIT 1').get(); }
+catch { db.prepare('ALTER TABLE hosted_servers ADD COLUMN empty_since INTEGER').run(); }
 
 // Migrate games.rom_id
 try { db.prepare('SELECT rom_id FROM games LIMIT 1').get(); }
@@ -441,6 +443,14 @@ function deleteHostedServer(id) {
   db.prepare('DELETE FROM hosted_servers WHERE id = ?').run(id);
 }
 
+function setServerEmptySince(id, ts) {
+  db.prepare('UPDATE hosted_servers SET empty_since = ? WHERE id = ?').run(ts, id);
+}
+
+function clearServerEmptySince(id) {
+  db.prepare('UPDATE hosted_servers SET empty_since = NULL WHERE id = ?').run(id);
+}
+
 // ── Reviews ───────────────────────────────────────────────────────────────────
 
 function listReviews(gameId) {
@@ -476,5 +486,6 @@ module.exports = {
   listPlatforms, createPlatform, deletePlatform,
   listRoms, getRomById, getGameByRomId, createRom, deleteRom,
   listHostedServers, getHostedServerById, createHostedServer, updateHostedServer, deleteHostedServer,
+  setServerEmptySince, clearServerEmptySince,
   listReviews, getReviewByUser, upsertReview, deleteReview,
 };

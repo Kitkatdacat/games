@@ -33,6 +33,7 @@ const {
   listPlatforms, createPlatform, deletePlatform,
   listRoms, getRomById, getGameByRomId, createRom, deleteRom,
   listHostedServers, getHostedServerById, createHostedServer, updateHostedServer, deleteHostedServer,
+  setServerEmptySince, clearServerEmptySince,
   listReviews, getReviewByUser, upsertReview, deleteReview,
 } = require('./db');
 
@@ -761,8 +762,6 @@ app.post('/api/hosted/:id/console/cmd', requireAuth, requireAdmin, async (req, r
 
 // ── Auto-shutdown ─────────────────────────────────────────────────────────────
 
-const emptySince = new Map(); // server id → timestamp when it became empty
-
 async function getRconPlayerCount(s) {
   let Rcon;
   try { Rcon = require('rcon-client').Rcon; } catch { return null; }
@@ -784,19 +783,20 @@ async function autoShutdownTick() {
   for (const s of servers) {
     try {
       const ready = await checkServerReady(s.rcon_service);
-      if (!ready) { emptySince.delete(s.id); continue; }
+      if (!ready) { clearServerEmptySince(s.id); continue; }
 
       const count = await getRconPlayerCount(s);
       if (count === null) continue; // RCON unavailable, skip
 
       if (count > 0) {
-        emptySince.delete(s.id);
+        clearServerEmptySince(s.id);
       } else {
-        if (!emptySince.has(s.id)) emptySince.set(s.id, Date.now());
-        const emptyMs = Date.now() - emptySince.get(s.id);
+        if (!s.empty_since) setServerEmptySince(s.id, Date.now());
+        const emptyMs = Date.now() - (s.empty_since || Date.now());
+        console.log(`[auto-shutdown] ${s.name}: 0 players, empty for ${Math.round(emptyMs / 60000)}min / ${s.auto_shutdown_hours * 60}min`);
         if (emptyMs >= s.auto_shutdown_hours * 60 * 60 * 1000) {
-          console.log(`[auto-shutdown] ${s.name} empty for ${s.auto_shutdown_hours}h — stopping`);
-          emptySince.delete(s.id);
+          console.log(`[auto-shutdown] ${s.name} — stopping`);
+          clearServerEmptySince(s.id);
           exec(s.stop_command, () => {});
         }
       }
