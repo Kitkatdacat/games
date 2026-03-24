@@ -579,7 +579,7 @@ function checkServerReady(service) {
   if (!service) return Promise.resolve(false);
   return new Promise(resolve => {
     exec(
-      `START=$(systemctl show ${service} --property=ActiveEnterTimestamp --value 2>/dev/null); journalctl -u ${service} --since "$START" --no-pager -o cat 2>/dev/null | grep -q "Done.*For help" && echo active || echo inactive`,
+      `systemctl is-active --quiet ${service} 2>/dev/null && START=$(systemctl show ${service} --property=ActiveEnterTimestamp --value 2>/dev/null) && journalctl -u ${service} --since "$START" --no-pager -o cat 2>/dev/null | grep -q "Done.*For help" && echo active || echo inactive`,
       (err, stdout) => resolve((stdout || '').trim() === 'active')
     );
   });
