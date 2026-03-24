@@ -794,7 +794,7 @@ async function autoShutdownTick() {
         if (!s.empty_since) setServerEmptySince(s.id, Date.now());
         const emptyMs = Date.now() - (s.empty_since || Date.now());
         console.log(`[auto-shutdown] ${s.name}: 0 players, empty for ${Math.round(emptyMs / 60000)}min / ${s.auto_shutdown_hours * 60}min`);
-        if (emptyMs >= s.auto_shutdown_hours * 60 * 60 * 1000) {
+        if (emptyMs >= 1 * 60 * 1000) { // TEST: 1 minute (change back to: s.auto_shutdown_hours * 60 * 60 * 1000)
           console.log(`[auto-shutdown] ${s.name} — stopping`);
           clearServerEmptySince(s.id);
           // Use RCON /stop so Minecraft exits cleanly (code 0), preventing systemd Restart=on-failure
@@ -823,7 +823,7 @@ async function autoShutdownTick() {
   }
 }
 
-setInterval(autoShutdownTick, 5 * 60 * 1000); // check every 5 minutes
+setInterval(autoShutdownTick, 30 * 1000); // TEST: 30 seconds (change back to: 5 * 60 * 1000)
 
 // ── Start ─────────────────────────────────────────────────────────────────────
 
