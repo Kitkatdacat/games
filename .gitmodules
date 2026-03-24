@@ -1,0 +1,3 @@
+[submodule "mc-bot"]
+	path = mc-bot
+	url = https://github.com/Kitkatdacat/mc-bot
