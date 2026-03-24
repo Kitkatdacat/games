@@ -797,7 +797,24 @@ async function autoShutdownTick() {
         if (emptyMs >= s.auto_shutdown_hours * 60 * 60 * 1000) {
           console.log(`[auto-shutdown] ${s.name} — stopping`);
           clearServerEmptySince(s.id);
-          exec(s.stop_command, () => {});
+          // Use RCON /stop so Minecraft exits cleanly (code 0), preventing systemd Restart=on-failure
+          let Rcon;
+          try { Rcon = require('rcon-client').Rcon; } catch { Rcon = null; }
+          if (Rcon) {
+            const rcon = new Rcon({ host: s.host || '127.0.0.1', port: s.rcon_port, password: s.rcon_password });
+            try {
+              await rcon.connect();
+              await rcon.send('stop');
+              await rcon.end();
+              console.log(`[auto-shutdown] ${s.name} — RCON stop sent`);
+            } catch (err) {
+              console.error(`[auto-shutdown] ${s.name} — RCON stop failed, falling back:`, err.message);
+              try { await rcon.end(); } catch {}
+              exec(s.stop_command, () => {});
+            }
+          } else {
+            exec(s.stop_command, () => {});
+          }
         }
       }
     } catch (err) {
