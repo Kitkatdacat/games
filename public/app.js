@@ -170,6 +170,8 @@ async function loadApp() {
   switchView('home');
   setupEvents();
   await refreshDropdownStats();
+  const isDev = ['localhost', '127.0.0.1'].includes(window.location.hostname) || /^\d+\.\d+\.\d+\.\d+$/.test(window.location.hostname);
+  if (!games.length || isDev) showGettingStarted();
 }
 
 async function refreshData() {
@@ -2834,6 +2836,117 @@ document.querySelectorAll(
 ).forEach(el => {
   el.addEventListener('click', () => el.classList.toggle('neon-letter--lit'));
 });
+
+// ── Getting Started Wizard ────────────────────────────────────────────────────
+
+const GS_STEPS = [
+  {
+    title: 'Welcome to KKDK Games',
+    content: `
+      <p>This is your personal gaming hub — track your library, play retro games through emulators, browse thousands of titles, and connect to hosted Minecraft servers.</p>
+      <p>This quick guide will walk you through the main features so you can hit the ground running.</p>
+    `,
+  },
+  {
+    title: 'Browse & add games',
+    content: `
+      <p>Head to <strong>Browse</strong> in the sidebar to search through thousands of games powered by RAWG.io.</p>
+      <p>Click any game to see details — ratings, screenshots, platforms, and more. Hit <strong>Add to Library</strong> to save it to your collection.</p>
+      <div class="gs-callout">You earn points for adding games, writing reviews, rating titles, and hitting library milestones. Check the leaderboard on the Hub to see how you stack up.</div>
+    `,
+  },
+  {
+    title: 'My Library',
+    content: `
+      <p>Your <strong>Library</strong> is where you track every game you own or want to play. Set a status — <strong>Playing</strong>, <strong>Completed</strong>, <strong>Backlog</strong>, or <strong>Dropped</strong> — and rate or review any title.</p>
+      <p>Use the filters and search at the top to quickly find games across your collection.</p>
+      <div class="gs-callout">Marking a game as Completed earns you 25 points — and writing a review earns another 10.</div>
+    `,
+  },
+  {
+    title: 'Emulators',
+    content: `
+      <p>The <strong>Emulators</strong> section lets you play retro games right in your browser — no downloads needed.</p>
+      <p>Pick a system, choose a game, and it launches directly in the page using a built-in emulator.</p>
+      <div class="gs-callout">Use the <strong>Controls</strong> section to remap buttons for your controller or keyboard before you start playing.</div>
+    `,
+  },
+  {
+    title: 'Hosted Servers',
+    content: `
+      <p>The <strong>Hosted</strong> section shows the KKDK Minecraft servers — Vanilla and Modded. You can check their status, start them if they're offline, and view the server address to connect.</p>
+      <p>Servers automatically shut down after <strong>24 hours</strong> with no players online to save resources.</p>
+    `,
+  },
+];
+
+let gsStep = 0;
+
+function showGettingStarted() {
+  gsStep = 0;
+  renderGsStep();
+  $id('gs-backdrop').classList.remove('hidden');
+}
+
+function closeGettingStarted() {
+  $id('gs-backdrop').classList.add('hidden');
+}
+
+function renderGsStep() {
+  const step   = GS_STEPS[gsStep];
+  const isLast = gsStep === GS_STEPS.length - 1;
+
+  const dots = GS_STEPS.map((_, i) => {
+    const cls = i < gsStep ? 'done' : i === gsStep ? 'active' : '';
+    return `<div class="gs-step-dot${cls ? ' ' + cls : ''}"></div>`;
+  }).join('');
+
+  const iconSvg = `<svg class="gs-icon" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+    <rect x="4" y="16" width="56" height="36" rx="6" stroke="currentColor" stroke-width="3"/>
+    <path d="M20 34h6M23 31v6" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/>
+    <circle cx="42" cy="34" r="1.5" fill="currentColor"/>
+    <circle cx="47" cy="34" r="1.5" fill="currentColor"/>
+    <path d="M28 52v4M36 52v4M22 56h20" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/>
+  </svg>`;
+
+  $id('gs-body').innerHTML = `
+    <div class="gs-header">
+      ${iconSvg}
+      <div class="gs-title">Getting Started</div>
+      ${gsStep === 0 ? `<div class="gs-subtitle">${step.title}</div>` : ''}
+    </div>
+    <div class="gs-steps">${dots}</div>
+    <div class="gs-content">
+      <div class="gs-step active">
+        <div class="gs-step-title">
+          <div class="gs-step-num">${gsStep + 1}</div>
+          ${gsStep > 0 ? step.title : "Let's get you set up"}
+        </div>
+        ${step.content}
+      </div>
+    </div>
+    <div class="gs-actions">
+      <button class="btn-text" id="gs-skip-btn">${isLast ? '' : 'Skip'}</button>
+      <div class="gs-btn-row">
+        ${gsStep > 0 ? `<button class="btn" id="gs-back-btn">Back</button>` : ''}
+        ${isLast
+          ? `<button class="btn btn-accent" id="gs-finish-btn">Go to Browse</button>`
+          : `<button class="btn btn-accent" id="gs-next-btn">Next</button>`
+        }
+      </div>
+    </div>
+  `;
+
+  $id('gs-close').addEventListener('click', closeGettingStarted);
+  const skipBtn = $id('gs-skip-btn');
+  if (skipBtn) skipBtn.addEventListener('click', closeGettingStarted);
+  const backBtn = $id('gs-back-btn');
+  if (backBtn) backBtn.addEventListener('click', () => { gsStep--; renderGsStep(); });
+  const nextBtn = $id('gs-next-btn');
+  if (nextBtn) nextBtn.addEventListener('click', () => { gsStep++; renderGsStep(); });
+  const finishBtn = $id('gs-finish-btn');
+  if (finishBtn) finishBtn.addEventListener('click', () => { closeGettingStarted(); switchView('search'); });
+}
 
 // ── Boot ──────────────────────────────────────────────────────────────────────
 init();
