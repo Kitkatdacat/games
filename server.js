@@ -10,15 +10,16 @@ if (fs_env.existsSync(envPath)) {
   });
 }
 
-const express  = require('express');
-const path     = require('path');
-const fs       = require('fs');
-const crypto   = require('crypto');
-const bcrypt   = require('bcryptjs');
-const multer   = require('multer');
-const AdmZip   = require('adm-zip');
-const net      = require('net');
-const { exec } = require('child_process');
+const express      = require('express');
+const path         = require('path');
+const fs           = require('fs');
+const crypto       = require('crypto');
+const bcrypt       = require('bcryptjs');
+const multer       = require('multer');
+const AdmZip       = require('adm-zip');
+const net          = require('net');
+const { exec }     = require('child_process');
+const { createApp, loginLimiter, errorHandler, validate, v } = require('@hub/auth/security');
 const {
   requireAuth, requireAdmin,
   safeUser, getUserCount, getUserById, getUserByUsername,
@@ -104,7 +105,7 @@ const imageUpload = multer({
   },
 });
 
-const app = express();
+const app = createApp();
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
@@ -122,7 +123,7 @@ app.get('/api/auth/status', (req, res) => {
   return res.json({ needsSetup, loggedIn: true, user: safeUser(user) });
 });
 
-app.post('/api/auth/setup', async (req, res) => {
+app.post('/api/auth/setup', loginLimiter, async (req, res) => {
   if (getUserCount() > 0) return res.status(400).json({ error: 'Setup already complete' });
   const { username, password, firstName, lastName } = req.body;
   if (!username || !password || !firstName || !lastName)
@@ -135,7 +136,7 @@ app.post('/api/auth/setup', async (req, res) => {
   } catch (err) { res.status(400).json({ error: err.message }); }
 });
 
-app.post('/api/auth/login', async (req, res) => {
+app.post('/api/auth/login', loginLimiter, async (req, res) => {
   const { username, password } = req.body;
   if (!username || !password) return res.status(400).json({ error: 'Username and password required' });
   const user = getUserByUsername(username);
@@ -405,7 +406,7 @@ app.get('/api/igdb/search', requireAuth, requireAdmin, async (req, res) => {
       cover:    g.cover?.url?.replace('t_thumb', 't_cover_big') || null,
       platforms: (g.platforms || []).map(p => p.name),
     })));
-  } catch (err) { res.status(500).json({ error: err.message }); }
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Internal server error' }); }
 });
 
 app.get('/api/igdb/game/:id', requireAuth, requireAdmin, async (req, res) => {
@@ -439,7 +440,7 @@ app.get('/api/igdb/game/:id', requireAuth, requireAdmin, async (req, res) => {
       platforms:    (game.platforms || []).map(p => p.name),
       all_images:   allImages,
     });
-  } catch (err) { res.status(500).json({ error: err.message }); }
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Internal server error' }); }
 });
 
 app.get('/api/rawg/search', requireAuth, requireAdmin, async (req, res) => {
@@ -532,6 +533,8 @@ app.post('/api/roms', requireAuth, requireAdmin, romUpload.single('rom'), (req, 
         return res.status(400).json({ error: 'ZIP contains no files' });
       }
       const entry   = entries[0];
+      if (entry.header.size > 512 * 1024 * 1024)
+        return res.status(400).json({ error: 'Extracted ROM exceeds 512 MB limit' });
       const ext     = path.extname(entry.entryName);
       const outName = `${crypto.randomUUID()}${ext}`;
       zip.extractEntryTo(entry, romsDir, false, true, false, outName);
@@ -554,7 +557,7 @@ app.get('/api/roms/:id', requireAuth, (req, res) => {
   res.json(rom);
 });
 
-app.get('/api/roms/:id/file', (req, res) => {
+app.get('/api/roms/:id/file', requireAuth, (req, res) => {
   const rom = getRomById(req.params.id);
   if (!rom) return res.status(404).json({ error: 'ROM not found' });
   const filePath = path.join(romsDir, rom.filename);
@@ -574,6 +577,13 @@ app.delete('/api/roms/:id', requireAuth, requireAdmin, (req, res) => {
 });
 
 // ── Hosted Servers ─────────────────────────────────────────────────────────────
+
+// Reject commands containing shell metacharacters that enable injection or chaining.
+// Legitimate systemctl/script commands don't need these characters.
+const SHELL_INJECTION_RE = /[;&|`$()<>\\]/;
+function isSafeCommand(cmd) {
+  return typeof cmd === 'string' && cmd.trim().length > 0 && !SHELL_INJECTION_RE.test(cmd);
+}
 
 function checkServerReady(service) {
   if (!service) return Promise.resolve(false);
@@ -608,13 +618,29 @@ app.get('/api/hosted', requireAuth, async (req, res) => {
   res.json(result);
 });
 
+function validateHostedServer(body) {
+  return validate({
+    name:          [v.required, v.maxLen(100)],
+    start_command: [v.maxLen(500)],
+    stop_command:  [v.maxLen(500)],
+    config_path:   [v.maxLen(500)],
+  }, body, { optional: ['start_command', 'stop_command', 'config_path'] })
+    || (body.port       != null && v.isPort(body.port))
+    || (body.rcon_port  != null && v.isPort(body.rcon_port))
+    || (body.start_command && !isSafeCommand(body.start_command) ? 'start_command: Invalid command' : null)
+    || (body.stop_command  && !isSafeCommand(body.stop_command)  ? 'stop_command: Invalid command'  : null);
+}
+
 app.post('/api/hosted', requireAuth, requireAdmin, (req, res) => {
-  if (!req.body.name) return res.status(400).json({ error: 'Name required' });
+  const err = validateHostedServer(req.body);
+  if (err) return res.status(400).json({ error: err });
   try { res.status(201).json(createHostedServer(req.body)); }
   catch (err) { res.status(400).json({ error: err.message }); }
 });
 
 app.put('/api/hosted/:id', requireAuth, requireAdmin, (req, res) => {
+  const err = validateHostedServer(req.body);
+  if (err) return res.status(400).json({ error: err });
   const s = updateHostedServer(req.params.id, req.body);
   if (!s) return res.status(404).json({ error: 'Server not found' });
   res.json(s);
@@ -630,6 +656,7 @@ app.post('/api/hosted/:id/start', requireAuth, requireAdmin, (req, res) => {
   const s = getHostedServerById(req.params.id);
   if (!s) return res.status(404).json({ error: 'Server not found' });
   if (!s.start_command) return res.status(400).json({ error: 'No start command configured' });
+  if (!isSafeCommand(s.start_command)) return res.status(400).json({ error: 'Invalid start command' });
   startingServers.add(s.id);
   exec(s.start_command, () => {});
   res.json({ ok: true });
@@ -639,6 +666,7 @@ app.post('/api/hosted/:id/stop', requireAuth, requireAdmin, (req, res) => {
   const s = getHostedServerById(req.params.id);
   if (!s) return res.status(404).json({ error: 'Server not found' });
   if (!s.stop_command) return res.status(400).json({ error: 'No stop command configured' });
+  if (!isSafeCommand(s.stop_command)) return res.status(400).json({ error: 'Invalid stop command' });
   exec(s.stop_command, () => {});
   res.json({ ok: true });
 });
@@ -656,7 +684,7 @@ app.get('/api/hosted/:id/config', requireAuth, requireAdmin, (req, res) => {
       cfg[line.slice(0, eq).trim()] = line.slice(eq + 1).trim();
     }
     res.json(cfg);
-  } catch (err) { res.status(500).json({ error: err.message }); }
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Internal server error' }); }
 });
 
 app.patch('/api/hosted/:id/config', requireAuth, requireAdmin, (req, res) => {
@@ -671,7 +699,7 @@ app.patch('/api/hosted/:id/config', requireAuth, requireAdmin, (req, res) => {
     }
     fs.writeFileSync(s.config_path, raw);
     res.json({ ok: true });
-  } catch (err) { res.status(500).json({ error: err.message }); }
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Internal server error' }); }
 });
 
 // ── Hosted server console (SSE log stream + RCON commands) ───────────────────
@@ -719,7 +747,7 @@ app.post('/api/hosted/:id/console/cmd', requireAuth, requireAdmin, async (req, r
     res.json({ ok: true, response });
   } catch (err) {
     try { await rcon.end(); } catch {}
-    res.status(500).json({ error: err.message });
+    console.error(err); res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -810,10 +838,10 @@ async function autoShutdownTick() {
             } catch (err) {
               console.error(`[auto-shutdown] ${s.name} — RCON stop failed, falling back:`, err.message);
               try { await rcon.end(); } catch {}
-              exec(s.stop_command, () => {});
+              if (isSafeCommand(s.stop_command)) exec(s.stop_command, () => {});
             }
           } else {
-            exec(s.stop_command, () => {});
+            if (isSafeCommand(s.stop_command)) exec(s.stop_command, () => {});
           }
         }
       }
@@ -824,6 +852,8 @@ async function autoShutdownTick() {
 }
 
 setInterval(autoShutdownTick, 5 * 60 * 1000);
+
+app.use(errorHandler);
 
 // ── Start ─────────────────────────────────────────────────────────────────────
 
