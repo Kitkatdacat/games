@@ -138,7 +138,6 @@ async function init() {
   applyTheme(localStorage.getItem('games-theme') || 'dark');
   try {
     const status = await api('GET', '/api/auth/status');
-    if (status.needsSetup) { showAuth('setup'); return; }
     if (!status.loggedIn)  { window.location.href = getHubUrl(); return; }
     currentUser = status.user;
     await loadApp();

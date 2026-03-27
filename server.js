@@ -14,16 +14,14 @@ const express      = require('express');
 const path         = require('path');
 const fs           = require('fs');
 const crypto       = require('crypto');
-const bcrypt       = require('bcryptjs');
 const multer       = require('multer');
 const AdmZip       = require('adm-zip');
 const net          = require('net');
 const { exec }     = require('child_process');
-const { createApp, loginLimiter, errorHandler, validate, v } = require('@hub/auth/security');
+const { createApp, errorHandler, validate, v } = require('@hub/auth/security');
 const {
   requireAuth, requireAdmin,
-  safeUser, getUserCount, getUserById, getUserByUsername,
-  createUser, createSession, getSession, touchSession, deleteSession,
+  safeUser, getUserById, getSession, touchSession,
 } = require('@hub/auth');
 const {
   listGames, getGameById, createGame, updateGame, deleteGame,
@@ -111,45 +109,16 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
 
+// Status check used by the frontend — validates hub session token
 app.get('/api/auth/status', (req, res) => {
-  const needsSetup = getUserCount() === 0;
   const token = req.headers['x-hub-session'];
-  if (!token) return res.json({ needsSetup, loggedIn: false });
+  if (!token) return res.json({ loggedIn: false });
   const session = getSession(token);
-  if (!session) return res.json({ needsSetup, loggedIn: false });
+  if (!session) return res.json({ loggedIn: false });
   const user = getUserById(session.userId);
-  if (!user) return res.json({ needsSetup, loggedIn: false });
+  if (!user) return res.json({ loggedIn: false });
   touchSession(token);
-  return res.json({ needsSetup, loggedIn: true, user: safeUser(user) });
-});
-
-app.post('/api/auth/setup', loginLimiter, async (req, res) => {
-  if (getUserCount() > 0) return res.status(400).json({ error: 'Setup already complete' });
-  const { username, password, firstName, lastName } = req.body;
-  if (!username || !password || !firstName || !lastName)
-    return res.status(400).json({ error: 'All fields required' });
-  try {
-    const hash  = await bcrypt.hash(password, 10);
-    const user  = createUser({ username, password: hash, firstName, lastName, role: 'admin' });
-    const token = createSession(user.id);
-    res.json({ token, user: safeUser(user) });
-  } catch (err) { res.status(400).json({ error: err.message }); }
-});
-
-app.post('/api/auth/login', loginLimiter, async (req, res) => {
-  const { username, password } = req.body;
-  if (!username || !password) return res.status(400).json({ error: 'Username and password required' });
-  const user = getUserByUsername(username);
-  if (!user) return res.status(401).json({ error: 'Invalid username or password' });
-  const match = await bcrypt.compare(password, user.password);
-  if (!match) return res.status(401).json({ error: 'Invalid username or password' });
-  const token = createSession(user.id);
-  res.json({ token, user: safeUser(user) });
-});
-
-app.post('/api/auth/logout', requireAuth, (req, res) => {
-  deleteSession(req.sessionToken);
-  res.json({ ok: true });
+  return res.json({ loggedIn: true, user: safeUser(user) });
 });
 
 app.get('/api/me', requireAuth, (req, res) => res.json(safeUser(req.user)));
