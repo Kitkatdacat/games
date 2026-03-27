@@ -759,6 +759,12 @@ app.post('/api/hosted/:id/console/cmd', requireAuth, requireAdmin, async (req, r
 
 // ── Auto-shutdown ─────────────────────────────────────────────────────────────
 
+// Seed with all server IDs so the first tick always resets empty_since,
+// preventing a stale DB value from triggering an immediate shutdown on restart.
+const _wasOffline = new Set(
+  listHostedServers().map(s => s.id)
+);
+
 async function getRconPlayerCount(s) {
   let Rcon;
   try { Rcon = require('rcon-client').Rcon; } catch { return null; }
@@ -780,7 +786,17 @@ async function autoShutdownTick() {
   for (const s of servers) {
     try {
       const ready = await checkServerReady(s.rcon_service);
-      if (!ready) { clearServerEmptySince(s.id); continue; }
+      if (!ready) {
+        clearServerEmptySince(s.id);
+        _wasOffline.add(s.id);
+        continue;
+      }
+
+      // Server just came back online — reset empty_since so stale DB value doesn't trigger immediate shutdown
+      if (_wasOffline.has(s.id)) {
+        clearServerEmptySince(s.id);
+        _wasOffline.delete(s.id);
+      }
 
       const count = await getRconPlayerCount(s);
       if (count === null) continue; // RCON unavailable, skip
