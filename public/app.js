@@ -2121,7 +2121,7 @@ async function renderHosted() {
             <span>${s.online ? 'Running' : s.starting ? 'Starting…' : 'Stopped'}</span>
           </button>
           <button class="server-tile-cfg-btn${s.config_path ? '' : ' hidden'}" data-id="${esc(s.id)}">⚙ Settings</button>
-          <button class="server-tile-console-btn${s.rcon_password ? '' : ' hidden'}" data-id="${esc(s.id)}">▶ Console</button>
+          <button class="server-tile-console-btn${s.rcon_service ? '' : ' hidden'}" data-id="${esc(s.id)}">▶ Console</button>
           ` : ''}
         </div>
       </div>
