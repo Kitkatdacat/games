@@ -564,6 +564,16 @@ function checkServerReady(service) {
   });
 }
 
+function checkPalworldReady(service) {
+  if (!service) return Promise.resolve(false);
+  return new Promise(resolve => {
+    exec(
+      `systemctl is-active --quiet ${service} 2>/dev/null && journalctl -u ${service} -n 100 --no-pager -o cat 2>/dev/null | grep -q "Running Palworld dedicated server" && echo active || echo inactive`,
+      (err, stdout) => resolve((stdout || '').trim() === 'active')
+    );
+  });
+}
+
 const startingServers = new Set();
 
 function checkServiceActive(service) {
@@ -578,6 +588,7 @@ function checkServiceActive(service) {
 
 async function isServerOnline(s) {
   if (s.rcon_service && s.rcon_port && s.rcon_password) return checkServerReady(s.rcon_service);
+  if (s.rcon_service === 'palworld') return checkPalworldReady(s.rcon_service);
   return (await getSatisfactoryPlayerCount(s)) !== null;
 }
 
