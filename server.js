@@ -576,10 +576,15 @@ function checkServiceActive(service) {
   });
 }
 
+async function isServerOnline(s) {
+  if (s.rcon_service && s.rcon_port && s.rcon_password) return checkServerReady(s.rcon_service);
+  return (await getSatisfactoryPlayerCount(s)) !== null;
+}
+
 app.get('/api/hosted', requireAuth, async (req, res) => {
   const servers = listHostedServers();
   const result = await Promise.all(servers.map(async s => {
-    const online = await checkServerReady(s.rcon_service);
+    const online = await isServerOnline(s);
     if (online) { startingServers.delete(s.id); return { ...s, online, starting: false }; }
     const starting = startingServers.has(s.id) || await checkServiceActive(s.rcon_service);
     return { ...s, online, starting };
@@ -816,7 +821,7 @@ async function autoShutdownTick() {
   for (const s of servers) {
     try {
       const useRcon = s.rcon_service && s.rcon_port && s.rcon_password;
-      const ready = useRcon ? await checkServerReady(s.rcon_service) : (await getSatisfactoryPlayerCount(s)) !== null;
+      const ready = await isServerOnline(s);
       if (!ready) {
         clearServerEmptySince(s.id);
         _wasOffline.add(s.id);
