@@ -765,6 +765,36 @@ const _wasOffline = new Set(
   listHostedServers().map(s => s.id)
 );
 
+async function getSatisfactoryPlayerCount(s) {
+  const https = require('https');
+  function sfPost(body, token) {
+    return new Promise((resolve, reject) => {
+      const data = JSON.stringify(body);
+      const headers = { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(data) };
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+      const req = https.request(
+        { hostname: '127.0.0.1', port: 7777, path: '/api/v1', method: 'POST', headers, rejectUnauthorized: false },
+        res => { let raw = ''; res.on('data', c => raw += c); res.on('end', () => { try { resolve(JSON.parse(raw)); } catch { resolve(null); } }); }
+      );
+      req.on('error', reject);
+      req.setTimeout(5000, () => { req.destroy(); reject(new Error('timeout')); });
+      req.write(data); req.end();
+    });
+  }
+  try {
+    const loginBody = s.rcon_password
+      ? { function: 'PasswordLogin', data: { MinimumPrivilegeLevel: 'Client', Password: s.rcon_password } }
+      : { function: 'PasswordlessLogin', data: { MinimumPrivilegeLevel: 'NotAuthenticated' } };
+    const login = await sfPost(loginBody);
+    const token = login?.data?.authenticationToken;
+    if (!token) return null;
+    const state = await sfPost({ function: 'QueryServerState', data: {} }, token);
+    return state?.data?.serverGameState?.numConnectedPlayers ?? null;
+  } catch {
+    return null;
+  }
+}
+
 async function getRconPlayerCount(s) {
   let Rcon;
   try { Rcon = require('rcon-client').Rcon; } catch { return null; }
@@ -782,10 +812,11 @@ async function getRconPlayerCount(s) {
 }
 
 async function autoShutdownTick() {
-  const servers = listHostedServers().filter(s => s.auto_shutdown_hours && s.rcon_password && s.stop_command);
+  const servers = listHostedServers().filter(s => s.auto_shutdown_hours && s.stop_command);
   for (const s of servers) {
     try {
-      const ready = await checkServerReady(s.rcon_service);
+      const useRcon = s.rcon_service && s.rcon_port && s.rcon_password;
+      const ready = useRcon ? await checkServerReady(s.rcon_service) : (await getSatisfactoryPlayerCount(s)) !== null;
       if (!ready) {
         clearServerEmptySince(s.id);
         _wasOffline.add(s.id);
@@ -798,8 +829,8 @@ async function autoShutdownTick() {
         _wasOffline.delete(s.id);
       }
 
-      const count = await getRconPlayerCount(s);
-      if (count === null) continue; // RCON unavailable, skip
+      const count = useRcon ? await getRconPlayerCount(s) : await getSatisfactoryPlayerCount(s);
+      if (count === null) continue;
 
       if (count > 0) {
         clearServerEmptySince(s.id);
@@ -810,19 +841,23 @@ async function autoShutdownTick() {
         if (emptyMs >= s.auto_shutdown_hours * 60 * 60 * 1000) {
           console.log(`[auto-shutdown] ${s.name} — stopping`);
           clearServerEmptySince(s.id);
-          // Use RCON /stop so Minecraft exits cleanly (code 0), preventing systemd Restart=on-failure
-          let Rcon;
-          try { Rcon = require('rcon-client').Rcon; } catch { Rcon = null; }
-          if (Rcon) {
-            const rcon = new Rcon({ host: s.host || '127.0.0.1', port: s.rcon_port, password: s.rcon_password });
-            try {
-              await rcon.connect();
-              await rcon.send('stop');
-              await rcon.end();
-              console.log(`[auto-shutdown] ${s.name} — RCON stop sent`);
-            } catch (err) {
-              console.error(`[auto-shutdown] ${s.name} — RCON stop failed, falling back:`, err.message);
-              try { await rcon.end(); } catch {}
+          if (useRcon) {
+            // Use RCON /stop so Minecraft exits cleanly (code 0), preventing systemd Restart=on-failure
+            let Rcon;
+            try { Rcon = require('rcon-client').Rcon; } catch { Rcon = null; }
+            if (Rcon) {
+              const rcon = new Rcon({ host: s.host || '127.0.0.1', port: s.rcon_port, password: s.rcon_password });
+              try {
+                await rcon.connect();
+                await rcon.send('stop');
+                await rcon.end();
+                console.log(`[auto-shutdown] ${s.name} — RCON stop sent`);
+              } catch (err) {
+                console.error(`[auto-shutdown] ${s.name} — RCON stop failed, falling back:`, err.message);
+                try { await rcon.end(); } catch {}
+                if (isSafeCommand(s.stop_command)) exec(s.stop_command, () => {});
+              }
+            } else {
               if (isSafeCommand(s.stop_command)) exec(s.stop_command, () => {});
             }
           } else {
