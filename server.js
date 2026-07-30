@@ -547,6 +547,15 @@ app.delete('/api/roms/:id', requireAuth, requireAdmin, (req, res) => {
 
 // ── Hosted Servers ─────────────────────────────────────────────────────────────
 
+function notifyBot(s, status) {
+  if (!s.rcon_service) return;
+  fetch('http://127.0.0.1:3010/notify', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ service: s.rcon_service, status }),
+  }).catch(() => {});
+}
+
 // Reject commands containing shell metacharacters that enable injection or chaining.
 // Legitimate systemctl/script commands don't need these characters.
 const SHELL_INJECTION_RE = /[;&|`$()<>\\]/;
@@ -644,6 +653,7 @@ app.post('/api/hosted/:id/start', requireAuth, requireAdmin, (req, res) => {
   if (!isSafeCommand(s.start_command)) return res.status(400).json({ error: 'Invalid start command' });
   startingServers.add(s.id);
   exec(s.start_command, () => {});
+  notifyBot(s, 'starting');
   res.json({ ok: true });
 });
 
@@ -653,6 +663,7 @@ app.post('/api/hosted/:id/stop', requireAuth, requireAdmin, (req, res) => {
   if (!s.stop_command) return res.status(400).json({ error: 'No stop command configured' });
   if (!isSafeCommand(s.stop_command)) return res.status(400).json({ error: 'Invalid stop command' });
   exec(s.stop_command, () => {});
+  notifyBot(s, 'offline');
   res.json({ ok: true });
 });
 
