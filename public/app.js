@@ -2125,7 +2125,6 @@ async function renderHosted() {
           ` : ''}
         </div>
       </div>
-      ${isAdmin && s.config_path ? `<div class="server-tile-cfg hidden" data-cfg-id="${esc(s.id)}"><div class="server-cfg-loading">Loading settings…</div></div>` : ''}
     </div>
   `).join('');
   applyDataStyles(grid);
@@ -2155,23 +2154,12 @@ async function renderHosted() {
       btn.addEventListener('click', () => openServerConsole(btn.dataset.id));
     });
 
-    // Settings toggle
+    // Settings button → modal
     grid.querySelectorAll('.server-tile-cfg-btn').forEach(btn => {
-      btn.addEventListener('click', async () => {
+      btn.addEventListener('click', () => {
         const id = btn.dataset.id;
-        const panel = grid.querySelector(`.server-tile-cfg[data-cfg-id="${id}"]`);
-        if (!panel) return;
-        const isOpen = !panel.classList.contains('hidden');
-        if (isOpen) { panel.classList.add('hidden'); btn.textContent = '⚙ Settings'; return; }
-        panel.classList.remove('hidden');
-        btn.textContent = '⚙ Hide Settings';
-        if (panel.querySelector('.server-cfg-loading')) {
-          try {
-            const cfg = await api('GET', `/api/hosted/${id}/config`);
-            panel.innerHTML = renderCfgPanel(id, cfg);
-            bindCfgSave(panel, id);
-          } catch { panel.innerHTML = '<div class="server-cfg-error">Could not load config.</div>'; }
-        }
+        const server = hostedServers.find(s => s.id === id);
+        openServerSettings(id, server?.name || 'Server');
       });
     });
   }
@@ -2245,6 +2233,42 @@ function bindCfgSave(panel, id) {
       status.textContent = '✗ ' + err.message;
       status.style.color = 'var(--danger)';
     }
+  });
+}
+
+// ── Server Settings Modal ─────────────────────────────────────────────────────
+
+function openServerSettings(id, name) {
+  if (!$id('server-settings-modal')) {
+    const el = document.createElement('div');
+    el.id = 'server-settings-modal';
+    el.className = 'server-settings-backdrop hidden';
+    el.innerHTML = `
+      <div class="server-settings-modal">
+        <div class="server-settings-bar">
+          <span class="server-settings-title" id="server-settings-title">Settings</span>
+          <button class="server-settings-close" id="server-settings-close">✕</button>
+        </div>
+        <div class="server-settings-body" id="server-settings-body">
+          <div class="server-cfg-loading">Loading settings…</div>
+        </div>
+      </div>`;
+    document.body.appendChild(el);
+    $id('server-settings-close').addEventListener('click', () => el.classList.add('hidden'));
+    el.addEventListener('click', e => { if (e.target === el) el.classList.add('hidden'); });
+  }
+
+  const modal = $id('server-settings-modal');
+  const body = $id('server-settings-body');
+  $id('server-settings-title').textContent = `${name} — Settings`;
+  body.innerHTML = '<div class="server-cfg-loading">Loading settings…</div>';
+  modal.classList.remove('hidden');
+
+  api('GET', `/api/hosted/${id}/config`).then(cfg => {
+    body.innerHTML = renderCfgPanel(id, cfg);
+    bindCfgSave(body, id);
+  }).catch(() => {
+    body.innerHTML = '<div class="server-cfg-error">Could not load config.</div>';
   });
 }
 
