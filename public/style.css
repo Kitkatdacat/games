@@ -1561,7 +1561,7 @@ html, body {
   position: absolute;
   inset: 0;
   background-size: cover;
-  background-position: center;
+  background-position: top;
   background-color: #1a1a1a;
   transition: transform 600ms ease;
 }
