@@ -573,6 +573,16 @@ function checkServerReady(service) {
   });
 }
 
+function checkPortAndService(service, port) {
+  if (!service || !port) return Promise.resolve(false);
+  return new Promise(resolve => {
+    exec(
+      `systemctl is-active --quiet ${service} 2>/dev/null && ss -ulnp | grep -q ":${port}" && echo active || echo inactive`,
+      (err, stdout) => resolve((stdout || '').trim() === 'active')
+    );
+  });
+}
+
 function checkPalworldReady(service) {
   if (!service) return Promise.resolve(false);
   return new Promise(resolve => {
@@ -598,6 +608,7 @@ function checkServiceActive(service) {
 async function isServerOnline(s) {
   if (s.rcon_service && s.rcon_port && s.rcon_password) return checkServerReady(s.rcon_service);
   if (s.rcon_service === 'palworld') return checkPalworldReady(s.rcon_service);
+  if (s.rcon_service && !s.rcon_password && s.port) return checkPortAndService(s.rcon_service, s.port);
   return (await getSatisfactoryPlayerCount(s)) !== null;
 }
 
